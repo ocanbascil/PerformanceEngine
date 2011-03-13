@@ -140,11 +140,11 @@ def _memcache_get(keys):
     in result is set to None
   '''
   keys = map(key_str,keys)
-  items = memcache.get_multi(keys)
+  cache_results = memcache.get_multi(keys)
   result = {}
   for key in keys:
     try:
-      result[key] = deserialize(result[key])
+      result[key] = deserialize(cache_results[key])
     except KeyError:
       result[key] = None
   return result
@@ -209,25 +209,20 @@ class pdb(object):
         not_found = _diff(keys, models.keys())
         if len(not_found):
           keys = not_found
-        else:
-          return _normalize_result(models.values())
           
     if MEMCACHE in _storage:
         models = dict(models,**_memcache_get(keys))
         not_found = _diff(keys,models.keys())
         if len(not_found):
           keys = not_found
-        else:
-          return _normalize_result(models.values())
     
     if DATASTORE in _storage:
         db_results = [key for key in db.get(keys) if key is not None]
-        print 'db_results %s'%db_results
+        #print 'db_results %s'%db_results
         if len(db_results):
           models  = dict(models,**_to_dict(db_results))
-          print 'models in datastore %s' %models
+          #print 'models in datastore %s' %models
           
-    print 'old keys: %s' %old_keys
     for key in old_keys:
       try:
         result.append(models[key])
@@ -268,8 +263,11 @@ class pdb(object):
         TransactionFailedError if the data could not be committed.
     '''
     get_flag = False
-
+    keys = []
+    
+    print 'models in put',models
     models = _to_list(models)   
+    
     _storage = _to_list(_storage)
 
     try: 
@@ -293,6 +291,7 @@ class pdb(object):
       keys = _cachepy_put(models, _local_expiration)
 
     if MEMCACHE in _storage:
+      print 'Storing in memcache %s' %models
       keys = _memcache_put(models,_memcache_expiration)
       
     return keys
