@@ -92,7 +92,6 @@ def _cachepy_get(keys):
     string representation of db.Key instances
   '''
   result = {}
-  keys = map(key_str,keys)
   for key in keys:
     result[key] = deserialize(cachepy.get(key))
   return result
@@ -122,8 +121,7 @@ def _cachepy_put(models,time = 0):
 
 
 def _cachepy_delete(keys):
-    cache_keys = map(key_str, keys)
-    for key in cache_keys: 
+    for key in keys: 
         cachepy.delete(key)
 
 def _memcache_get(keys):
@@ -139,7 +137,6 @@ def _memcache_get(keys):
     If no model is found for given key, value for that key
     in result is set to None
   '''
-  keys = map(key_str,keys)
   cache_results = memcache.get_multi(keys)
   result = {}
   for key in keys:
@@ -170,10 +167,8 @@ def _memcache_put(models,time = 0):
   return to_put.keys()
 
 
-        
 def _memcache_delete(keys): #Seconds for lock?
-    cache_keys = map(_cache_key_from_key, keys)
-    memcache.delete_multi(cache_keys)
+    memcache.delete_multi(keys)
 
   
 class pdb(object):
@@ -238,7 +233,7 @@ class pdb(object):
                        **kwargs):
     '''Saves models into given storage layers and returns their keys
     
-    If the models are written for the first time and they have no key names,
+    If the models are written for the first time and they have no keys ,
     They are first written into datastore and then saved to other storage layers
     using the keys returned by datastore put() operation.
     
@@ -262,48 +257,73 @@ class pdb(object):
       Inherited:
         TransactionFailedError if the data could not be committed.
     '''
-    get_flag = False
-    keys = []
-    
-    print 'models in put',models
-    models = _to_list(models)   
-    
-    _storage = _to_list(_storage)
 
+    keys = [] 
+    models = _to_list(models)   
+    _storage = _to_list(_storage)
+    
     try: 
       _to_dict(models)
     except db.NotSavedError:
       if DATASTORE in _storage:
-        get_flag = True
-      else:
-        raise IdentifierNotFoundError() 
-    
-    if DATASTORE in _storage:
-      keys = db.put(models)
-      if get_flag:
-        get_flag = False
+        keys = db.put(models)
         models = db.get(keys)
         _storage.remove(DATASTORE)
         if len(_storage):
           return pdb.put(models,_storage,_local_expiration,_memcache_expiration)
-
+      else: 
+        raise IdentifierNotFoundError() 
+    
+    if DATASTORE in _storage:
+      keys = db.put(models)
+      
     if LOCAL in _storage:
       keys = _cachepy_put(models, _local_expiration)
 
     if MEMCACHE in _storage:
-      print 'Storing in memcache %s' %models
       keys = _memcache_put(models,_memcache_expiration)
       
     return keys
 
   
   @classmethod
-  def delete():
-      pass
-  
+  def delete(cls,keys,_storage = ALL_LEVELS):
+    keys = map(key_str,keys)
+      
+    if DATASTORE in _storage:
+      db.delete(keys)
+      
+    if LOCAL in _storage:
+      _cachepy_delete(keys)
+
+    if MEMCACHE in _storage:
+      _memcache_delete(keys)
   
   class Model(db.Model):
-    _storage  = [LOCAL,MEMCACHE,DATASTORE]
+    '''Wrapper class for db.Model
+    Adds cached storage support to common functions'''
+    
+    def put(self,_storage = ALL_LEVELS,
+                  _local_expiration = LOCAL_EXPIRATION,
+                  _memcache_expiration = MEMCACHE_EXPIRATION,
+                  **kwargs):
+      pass
+    
+    def get(self,keys,_storage = ALL_LEVELS,**kwargs):
+      pass
+    
+    def delete(self,_storage = ALL_LEVELS):
+      pass
+    
+    def get_or_insert(self,key_name,**kwargs):
+      #Add get without txn here
+      pass
+    
+    def get_by_key_name(self,key_name):
+      pass
+    
+    def get_by_id(self,id):
+      pass
     ''' 
     def get(self,keys,
                     _storage = _storage,
