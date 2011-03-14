@@ -185,37 +185,23 @@ class pdb(object):
     """
     none_filter  = lambda dict : [k for k,v in dict.iteritems() if v is None]
     
-    keys = _to_list(keys)
-    keys = map(key_str, keys)
+    keys = map(key_str, _to_list(keys))
     old_keys = keys
-    not_found  = []
     result = []
     models = {}
     
     if LOCAL in _storage:
-        #print 'Getting from local storage, keys: %s' %keys
         models = dict(models,**_cachepy_get(keys))
         keys = none_filter(models)
-        print '1',models
-        not_found = _diff(keys, models.keys())
-        if len(not_found):
-          keys = not_found
           
     if MEMCACHE in _storage and len(keys):
         models = dict(models,**_memcache_get(keys))
         keys = none_filter(models)
-        print '2',models
-        not_found = _diff(keys,models.keys())
-        if len(not_found):
-          keys = not_found
     
     if DATASTORE in _storage and len(keys):
-        db_results = [key for key in db.get(keys) if key is not None]
-        #print 'db_results %s'%db_results
+        db_results = [model for model in db.get(keys) if model is not None]
         if len(db_results):
           models  = dict(models,**_to_dict(db_results))
-          #print 'models in datastore %s' %models
-        print '3',models
       
     #Restore the order of entities   
     for key in old_keys:
