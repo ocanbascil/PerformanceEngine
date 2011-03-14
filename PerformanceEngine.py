@@ -22,9 +22,6 @@ DICT = 'dict'
 LOCAL_EXPIRATION = 0
 MEMCACHE_EXPIRATION = 0
 
-
-key_str = lambda model : str(model.key())
-
 def key_str(param):
   if isinstance(param, db.Model):
     return str(param.key())
@@ -54,11 +51,6 @@ def _to_dict(models):
   for model in models:
     result[key_str(model)] = model
   return result
-
-def _normalize_result(models):
-  if len(models) > 1:
-    return models
-  return models[0]
 
 def serialize(models):
   '''Improve memcache performance converting to protobuf'''
@@ -191,6 +183,8 @@ class pdb(object):
       keys was given: a list whose items are either a Model instance or
       None.
     """
+    none_filter  = lambda dict : [k for k,v in dict.iteritems() if v is None]
+    
     keys = _to_list(keys)
     keys = map(key_str, keys)
     old_keys = keys
@@ -201,30 +195,39 @@ class pdb(object):
     if LOCAL in _storage:
         #print 'Getting from local storage, keys: %s' %keys
         models = dict(models,**_cachepy_get(keys))
+        keys = none_filter(models)
+        print '1',models
         not_found = _diff(keys, models.keys())
         if len(not_found):
           keys = not_found
           
-    if MEMCACHE in _storage:
+    if MEMCACHE in _storage and len(keys):
         models = dict(models,**_memcache_get(keys))
+        keys = none_filter(models)
+        print '2',models
         not_found = _diff(keys,models.keys())
         if len(not_found):
           keys = not_found
     
-    if DATASTORE in _storage:
+    if DATASTORE in _storage and len(keys):
         db_results = [key for key in db.get(keys) if key is not None]
         #print 'db_results %s'%db_results
         if len(db_results):
           models  = dict(models,**_to_dict(db_results))
           #print 'models in datastore %s' %models
-          
+        print '3',models
+      
+    #Restore the order of entities   
     for key in old_keys:
       try:
         result.append(models[key])
       except KeyError:
         result.append(None)
-      
-    return result
+        
+    #Normalized result
+    if len(result) > 1:
+      return result
+    return result[0]
         
   @classmethod
   def put(cls,models,_storage = ALL_LEVELS,
@@ -303,14 +306,11 @@ class pdb(object):
     '''Wrapper class for db.Model
     Adds cached storage support to common functions'''
     
-    def put(self,_storage = ALL_LEVELS,
-                  _local_expiration = LOCAL_EXPIRATION,
-                  _memcache_expiration = MEMCACHE_EXPIRATION,
-                  **kwargs):
-      pass
+    def put(self,**kwargs):
+      return pdb.put(self, **kwargs)
     
-    def get(self,keys,_storage = ALL_LEVELS,**kwargs):
-      pass
+    def get(self,keys,**kwargs):
+      return pdb.get(keys,**kwargs)
     
     def delete(self,_storage = ALL_LEVELS):
       pass
@@ -319,10 +319,12 @@ class pdb(object):
       #Add get without txn here
       pass
     
-    def get_by_key_name(self,key_name):
+    @classmethod
+    def get_by_key_name(cls,key_name):
       pass
     
-    def get_by_id(self,id):
+    @classmethod
+    def get_by_id(cls,id):
       pass
     ''' 
     def get(self,keys,
