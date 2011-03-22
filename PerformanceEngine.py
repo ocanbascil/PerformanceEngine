@@ -166,7 +166,7 @@ def _memcache_delete(keys): #Seconds for lock?
 class pdb(object):
   
   @classmethod
-  def get(cls,keys,_storage = [LOCAL,MEMCACHE,DATASTORE],**kwargs):
+  def get(cls,keys,_storage = ALL_LEVELS,**kwargs):
     """Fetch the specific Model instance with the given key from given storage layers.
   
     Args:
@@ -185,6 +185,7 @@ class pdb(object):
     """
     none_filter  = lambda dict : [k for k,v in dict.iteritems() if v is None]
     
+    _storage = _to_list(_storage)
     keys = map(key_str, _to_list(keys))
     old_keys = keys
     result = []
