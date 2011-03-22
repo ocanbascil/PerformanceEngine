@@ -327,24 +327,30 @@ class pdb(object):
     '''Wrapper class for db.Model
     Adds cached storage support to common functions'''
     
-    def put(self,**kwargs):
+    def put(self,_storage = ALL_LEVELS,
+                    _local_expiration = LOCAL_EXPIRATION,
+                    _memcache_expiration = MEMCACHE_EXPIRATION,
+                    **kwargs):
       return pdb.put(self, **kwargs)
     
     @classmethod
-    def get(cls,keys,**kwargs):
+    def get(cls,keys,_storage = ALL_LEVELS,**kwargs):
       return pdb.get(keys,**kwargs)
     
-    def delete(self):
+    def delete(self,_storage = ALL_LEVELS):
       pdb.delete(self.key())
     
     @classmethod
-    def get_or_insert(cls,key_name,**kwargs):
-      #Add get without txn here
-
-      pass
-
-    @classmethod
-    def get_by_key_name(cls,key_names, parent=None,_storage=ALL_LEVELS, **kwargs):
+    def get_by_key_name(cls,key_names, parent=None,_storage = ALL_LEVELS,**kwargs):
+      """Get instance of Model class by its key's name from the given storage layers.
+  
+      Args:
+        _storage: string or array of strings for target storage layers
+        
+        Inherited:
+          key_names: A single key-name or a list of key-names.
+          parent: Parent of instances to get.  Can be a model or key.
+      """
       try:
         parent = db._coerce_to_key(parent)
       except db.BadKeyError, e:
@@ -353,10 +359,19 @@ class pdb(object):
       key_strings = [key_str(db.Key.from_path(cls.kind(), name, parent=parent))
         for name in key_names]
       
-      return pdb.get(key_strings, _storage,**kwargs)
+      return pdb.get(key_strings,**kwargs)
     
     @classmethod
-    def get_by_id(cls, ids, parent=None,_storage=ALL_LEVELS,**kwargs):
+    def get_by_id(cls, ids, parent=None,_storage = ALL_LEVELS,**kwargs):
+      """Get instance of Model class by id from the given storage layers.
+  
+      Args:
+         _storage: string or array of strings for target storage layers
+         
+        Inherited:
+          ids: A single id or a list of ids.
+          parent: Parent of instances to get.  Can be a model or key.
+      """
       try:
         parent = db._coerce_to_key(parent)
       except db.BadKeyError, e:
@@ -366,52 +381,25 @@ class pdb(object):
       key_strings = [key_str(datastore.Key.from_path(cls.kind(), id, parent=parent))
         for id in ids]
       
-      return pdb.get(key_strings, _storage,**kwargs)
-    ''' 
-    def get(self,keys,
-                    _storage = _storage,
-                    **kwargs):
-        result = []
-        if LOCAL in _storage:
-            pass
-        
-        if MEMCACHE in _storage:
-            pass
-        
-        if DATASTORE in _storage:
-            pass
+      return pdb.get(key_strings,**kwargs)
     
-    def delete(self,
-               _storage_layers =_storage,
-                **kwargs):
-        
-        if LOCAL in _storage_layers:
-            pass
-        
-        if MEMCACHE in _storage_layers:
-            pass
-        
-        if DATASTORE in _storage_layers:
-            pass
+    @classmethod
+    def get_or_insert(cls,key_name,
+                      _storage = ALL_LEVELS,
+                      _local_expiration = LOCAL_EXPIRATION,
+                      _memcache_expiration = MEMCACHE_EXPIRATION,
+                      **kwds):
+      def txn():
+        entity = cls(key_name=key_name, **kwds)
+        entity.put(**kwds)
+        return entity
     
-    def put(self,_storage_layers =_storage,
-                    _memcache_expiration = _memcache_expiration,
-                    _local_expiration = _local_cache_expiration,
-                    **kwargs):
-        
-        if LOCAL in _storage_layers:
-            pass
-        
-        if MEMCACHE in _storage_layers:
-            pass
-        
-        if DATASTORE in _storage_layers:
-            pass
-        
-        #self.before_put()
-        super(Model, self).put(**kwargs)
-        #self.after_put()
-     '''     
+      entity = cls.get_by_key_name(key_name,parent=kwds.get('parent'))
+      if entity is None:
+        return db.run_in_transaction(txn)
+      else:
+        return entity
+
     def clone_entity(self,**extra_args):
         """Clones an entity, adding or overriding constructor attributes.
         
