@@ -309,18 +309,20 @@ class pdb(object):
     Raises:
       TransactionFailedError if the data could not be committed.
     """
-    keys = map(key_str,keys)
-    _storage = _to_list(_storage)
-    validate_storage(_storage)   
+    def txn():      
+      if DATASTORE in _storage:
+        db.delete(keys)
+        
+      if LOCAL in _storage:
+        _cachepy_delete(keys)
+  
+      if MEMCACHE in _storage:
+        _memcache_delete(keys)
     
-    if DATASTORE in _storage:
-      db.delete(keys)
-      
-    if LOCAL in _storage:
-      _cachepy_delete(keys)
-
-    if MEMCACHE in _storage:
-      _memcache_delete(keys)
+    keys = map(key_str, _to_list(keys))
+    _storage = _to_list(_storage)
+    validate_storage(_storage)  
+    db.run_in_transaction(txn)
   
   
   class Model(db.Model):
@@ -401,38 +403,38 @@ class pdb(object):
         return entity
 
     def clone_entity(self,**extra_args):
-        """Clones an entity, adding or overriding constructor attributes.
-        
-            The cloned entity will have exactly the same property values as the original
-            entity, except where overridden. By default it will have no parent entity or
-            key name, unless supplied.
-        
-        Args:
-            e: The entity to clone
-            extra_args: Keyword arguments to override from the cloned entity and pass
-            to the constructor.
-        Returns:
-            A cloned, possibly modified, copy of entity e.
+      """Clones an entity, adding or overriding constructor attributes.
+      
+          The cloned entity will have exactly the same property values as the original
+          entity, except where overridden. By default it will have no parent entity or
+          key name, unless supplied.
+      
+      Args:
+          e: The entity to clone
+          extra_args: Keyword arguments to override from the cloned entity and pass
+          to the constructor.
+      Returns:
+          A cloned, possibly modified, copy of entity e.
         """
-        klass = self.__class__
-        props = {}
+      klass = self.__class__
+      props = {}
         
-        for k,v in klass.properties().iteritems():
-            if isinstance(v, db.ReferenceProperty):
-                props[k] = v.get_value_for_datastore(self)
-            else:
-                props[k] = v.__get__(self,klass)
-                
-        props.update(extra_args)
-        return klass(**props)
+      for k,v in klass.properties().iteritems():
+        if isinstance(v, db.ReferenceProperty):
+          props[k] = v.get_value_for_datastore(self)
+        else:
+          props[k] = v.__get__(self,klass)
+              
+      props.update(extra_args)
+      return klass(**props)
     
     def log_properties(self):
-        
-        for k,v in self.properties().iteritems():
-            logging.info('%s : %s' %(k,v.get_value_for_datastore(self)))  
+      '''Log properties of an entity'''
+      for k,v in self.properties().iteritems():
+          logging.info('%s : %s' %(k,v.get_value_for_datastore(self)))  
   
-class GqlQuery(db.GqlQuery):
-    pass
+  class GqlQuery(db.GqlQuery):
+      pass
 
 
 
