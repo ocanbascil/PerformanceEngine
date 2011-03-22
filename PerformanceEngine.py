@@ -1,5 +1,6 @@
 from google.appengine.api import memcache
 from google.appengine.ext import db
+from google.appengine.api import datastore
 from google.appengine.datastore import entity_pb
 from google.appengine.ext import deferred
 
@@ -22,20 +23,24 @@ DICT = 'dict'
 LOCAL_EXPIRATION = 0
 MEMCACHE_EXPIRATION = 0
 
+def validate_storage(storage_list):
+  for storage in storage_list:
+    if storage not in ALL_LEVELS:
+      raise StorageLayerError(storage)
+
+
 def key_str(param):
-  if isinstance(param, db.Model):
-    return str(param.key())
-  elif isinstance(param, db.Key):
-    return str(param)
-  elif isinstance(param,str):
-    return param
-  else:
+  '''Utility function that extracts a string key from a model or key instance'''
+  try:
+    return str(db._coerce_to_key(param))
+  except db.BadArgumentError:
     raise KeyParameterError(param)
 
 def _diff(list1,list2):
   '''Finds the difference of keys between 2 lists
   Used for layered model retrieval'''
   return list(set(list1)-set(list2))
+
 
 def _to_list(param): 
     if not type(param).__name__=='list':
@@ -45,12 +50,14 @@ def _to_list(param):
         result = list(param)
     return result
 
+
 def _to_dict(models):
   '''Utility method to create identifier:model dictionary'''
   result = {}
   for model in models:
     result[key_str(model)] = model
   return result
+
 
 def serialize(models):
   '''Improve memcache performance converting to protobuf'''
@@ -63,6 +70,7 @@ def serialize(models):
     # A list
     return [db.model_to_protobuf(x).Encode() for x in models]
 
+
 def deserialize(data):
   '''Improve memcache performance by converting from protobuf'''
   if data is None:
@@ -72,6 +80,7 @@ def deserialize(data):
     return db.model_from_protobuf(entity_pb.EntityProto(data))
   else:
     return [db.model_from_protobuf(entity_pb.EntityProto(x)) for x in data]
+
 
 def _cachepy_get(keys):
   '''Get items with given keys from local cache
@@ -87,6 +96,7 @@ def _cachepy_get(keys):
   for key in keys:
     result[key] = deserialize(cachepy.get(key))
   return result
+
 
 def _cachepy_put(models,time = 0):
   '''Put given models to local cache in serialized form
@@ -113,8 +123,10 @@ def _cachepy_put(models,time = 0):
 
 
 def _cachepy_delete(keys):
-    for key in keys: 
-        cachepy.delete(key)
+  '''Delete models with given keys from local cache'''
+  for key in keys: 
+      cachepy.delete(key)
+
 
 def _memcache_get(keys):
   '''Get items with given keys from memcache
@@ -138,6 +150,7 @@ def _memcache_get(keys):
       result[key] = None
   return result
     
+    
 def _memcache_put(models,time = 0):
   '''Put given models to memcache in serialized form
    with expiration in seconds
@@ -160,10 +173,12 @@ def _memcache_put(models,time = 0):
 
 
 def _memcache_delete(keys): #Seconds for lock?
-    memcache.delete_multi(keys)
-
+  '''Delete models with given keys from memcache'''
+  memcache.delete_multi(keys)
+  
   
 class pdb(object):
+  '''Wrapper class for google.appengine.ext.db with seamless cache support'''
   
   @classmethod
   def get(cls,keys,_storage = ALL_LEVELS,**kwargs):
@@ -186,6 +201,8 @@ class pdb(object):
     none_filter  = lambda dict : [k for k,v in dict.iteritems() if v is None]
     
     _storage = _to_list(_storage)
+    validate_storage(_storage)
+    
     keys = map(key_str, _to_list(keys))
     old_keys = keys
     result = []
@@ -200,7 +217,7 @@ class pdb(object):
         keys = none_filter(models)
     
     if DATASTORE in _storage and len(keys):
-        db_results = [model for model in db.get(keys) if model is not None]
+        db_results = [model for model in db.get(keys,**kwargs) if model is not None]
         if len(db_results):
           models  = dict(models,**_to_dict(db_results))
       
@@ -215,6 +232,7 @@ class pdb(object):
     if len(result) > 1:
       return result
     return result[0]
+        
         
   @classmethod
   def put(cls,models,_storage = ALL_LEVELS,
@@ -251,6 +269,7 @@ class pdb(object):
     keys = [] 
     models = _to_list(models)   
     _storage = _to_list(_storage)
+    validate_storage(_storage)
     
     try: 
       _to_dict(models)
@@ -265,7 +284,7 @@ class pdb(object):
         raise IdentifierNotFoundError() 
     
     if DATASTORE in _storage:
-      keys = db.put(models)
+      keys = db.put(models,**kwargs)
       
     if LOCAL in _storage:
       keys = _cachepy_put(models, _local_expiration)
@@ -275,11 +294,25 @@ class pdb(object):
       
     return keys
 
-  
+
   @classmethod
   def delete(cls,keys,_storage = ALL_LEVELS):
-    keys = map(key_str,keys)
+    """Delete one or more Model instances from given storage layers
+  
+    Args:
+      _storage: string or array of strings for target storage layers
       
+      Inherited:
+        models: Model instance, key, key string or iterable thereof.
+        config: datastore_rpc.Configuration to use for this request.
+  
+    Raises:
+      TransactionFailedError if the data could not be committed.
+    """
+    keys = map(key_str,keys)
+    _storage = _to_list(_storage)
+    validate_storage(_storage)   
+    
     if DATASTORE in _storage:
       db.delete(keys)
       
@@ -289,6 +322,7 @@ class pdb(object):
     if MEMCACHE in _storage:
       _memcache_delete(keys)
   
+  
   class Model(db.Model):
     '''Wrapper class for db.Model
     Adds cached storage support to common functions'''
@@ -296,23 +330,43 @@ class pdb(object):
     def put(self,**kwargs):
       return pdb.put(self, **kwargs)
     
-    def get(self,keys,**kwargs):
+    @classmethod
+    def get(cls,keys,**kwargs):
       return pdb.get(keys,**kwargs)
     
-    def delete(self,_storage = ALL_LEVELS):
-      pass
+    def delete(self):
+      pdb.delete(self.key())
     
-    def get_or_insert(self,key_name,**kwargs):
+    @classmethod
+    def get_or_insert(cls,key_name,**kwargs):
       #Add get without txn here
+
       pass
+
+    @classmethod
+    def get_by_key_name(cls,key_names, parent=None,_storage=ALL_LEVELS, **kwargs):
+      try:
+        parent = db._coerce_to_key(parent)
+      except db.BadKeyError, e:
+        raise db.BadArgumentError(str(e))
+      key_names = _to_list(key_names)
+      key_strings = [key_str(db.Key.from_path(cls.kind(), name, parent=parent))
+        for name in key_names]
+      
+      return pdb.get(key_strings, _storage,**kwargs)
     
     @classmethod
-    def get_by_key_name(cls,key_name):
-      pass
-    
-    @classmethod
-    def get_by_id(cls,id):
-      pass
+    def get_by_id(cls, ids, parent=None,_storage=ALL_LEVELS,**kwargs):
+      try:
+        parent = db._coerce_to_key(parent)
+      except db.BadKeyError, e:
+        raise db.BadArgumentError(str(e))
+      
+      ids = _to_list(ids)
+      key_strings = [key_str(datastore.Key.from_path(cls.kind(), id, parent=parent))
+        for id in ids]
+      
+      return pdb.get(key_strings, _storage,**kwargs)
     ''' 
     def get(self,keys,
                     _storage = _storage,
@@ -395,9 +449,11 @@ class GqlQuery(db.GqlQuery):
 
 
     
-
-
-
+class StorageLayerError(Exception):
+  def __init__(self,storage):
+      self.storage = storage
+  def __str__(self):
+    return  'Storage layer name not found: %s. Valid values are "local","memcache" and "datastore"' %self.storage
 
 class KeyParameterError(Exception):
   def __init__(self,param):
@@ -405,7 +461,6 @@ class KeyParameterError(Exception):
   def __str__(self):
       return  '%s was given as function parameter, it should be db.Key,String or db.Model' %self.type
        
-            
 class IdentifierNotFoundError(Exception):
     def __str__(self):
         return  'Error trying to write models into cache without valid identifiers. Try enabling datastore write for the models or use keynames instead of IDs.'
