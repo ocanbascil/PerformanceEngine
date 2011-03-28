@@ -1,0 +1,60 @@
+Performance Engine
+===============
+
+**What is it?**
+PerformanceEngine is a simple wrapper module that enables layered 
+data model storage on Google Application Engine. 
+
+Basic Usage
+------------
+	from PerformanceEngine import pdb
+	
+	models  = [...] #Group of db.Model entities
+	keys = pdb.put(models)
+	
+	#Get from local cache
+	local_models = pdb.get(keys,_storage='local')
+	
+	#Get from memcache
+	memcache_models = pdb.get(keys,_storage='memcache')
+	
+	#Get from datastore, same as db.get()
+	db_models = pdb.get(keys,_storage='datastore')
+	
+	#Get from local & memcache
+	cache_models = pdb.get(keys,_storage=['local','memcache']
+	
+	#Get from all layers
+	models = pdb.get(keys)
+	
+Result Types
+------------
+
+Let's say we have a model class called TestModel and our app name is modeltestapp
+
+	model1 = TestModel(key_name='model1')
+	model2 = TestModel(key_name='model2')
+	model3 = TestModel()
+	
+	keys = pdb.put([model1,model2,model3])
+	
+	#Result as list
+	models = pdb.get(keys)
+	
+	#Result as key-model dict
+	#{'agxtb2RlbHRlc3RhcHByFQsSCVRlc3RNb2RlbCIGbW9kZWwxDA':<TestModel>,...}
+	model_dict = pdb.get(keys,_result_type='dict')
+	
+	#Result as key_name-model dict
+	#{'model1':<TestModel>,'model2':<TestModel>,'1':<TestModel>}
+	#We didn't supply a key_name for 3rd model, so result dict has a str(id) as dict key
+	model_dict = pdb.get(keys,_result_type='key_name_dict')
+	
+License
+-------
+This module is release under the BSD License. You can find the full text of
+the license in the LICENSE file.
+
+Contact
+--------
+ocanbascil at gmail dot com
