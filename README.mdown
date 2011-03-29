@@ -13,6 +13,10 @@ Features
 * Different result types (list, key-model dict,name-model dict)
 to increase developer performance.
 
+Requirements
+-------------
+* cachepy => http://appengine-cookbook.appspot.com/recipe/cachepy-faster-than-memcache-and-unlimited-quota/
+
 What is it good for?
 -------------------
 * Applications that have high amount and frequency of write operations.
@@ -89,11 +93,11 @@ Result as list
 
 	models = pdb.get(keys)
 	
-Result as key-model dict ({'agxtb2RlbHR...':<TestModel>,...})
+Result as key-model dict ({'agxtb2RlbHR...':TestModel,...})
 
 	model_dict = pdb.get(keys,_result_type='dict')
 	
-Result as key_name-model dict ({'model1':<TestModel>,'model2':<TestModel>,'1':<TestModel>})
+Result as key_name-model dict ({'model1':TestModel,'model2':TestModel,'1':TestModel})
 We didn't supply a key_name for 3rd model, so result dict has a str(id) as dict key
 
 	model_dict = pdb.get(keys,_result_type='name_dict')
@@ -142,13 +146,14 @@ Let's say we have 3 keys, db_key,memcache_key and local_key that correspond to 3
 When we do a pdb.get along with the following parameters a cascaded cache update operation is started.
 
 	keys = [db_key,memcache_key,local_key]
-	pdb.get(keys,_storage=['local','memcache','datastore'],_cache_refresh=['local','memcahe'])
+	pdb.get(keys,_storage=['local','memcache','datastore'],_cache_refresh=['local','memcache'])
 	
-For db_key, the model is retrieved from datastore and written into both memcache and local cache.
-For memcache_key, the model is retrieved from memcache and written into local cache.
-For local_key, the model is retrieved from local cache (if we're lucky) and is not updated elsewhere.
+* For db_key, the model is retrieved from datastore and written into both memcache and local cache.
+* For memcache_key, the model is retrieved from memcache and written into local cache.
+* For local_key, the model is retrieved from local cache (if we're lucky) and is not updated elsewhere.
 
-To sum up: During a get operation, any layer can update the layers above it but not the ones beneath it.
+* To sum up: During a get operation, any layer can update the layers above it but not the ones beneath it.
+
 To disable this update behavior use:
 	
 	pdb.get(keys,_cache_refresh=None)

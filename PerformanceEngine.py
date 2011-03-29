@@ -224,7 +224,7 @@ class pdb(object):
     given storage layers in given format. 
     
     WARNING: If you try to get different model kinds with the same key
-    names and use KEY_NAME_DICT as result type, you'll lose data as
+    names and use NAME_DICT as result type, you'll lose data as
     models with same key_names will overwrite each other
   
     Args:
@@ -245,7 +245,7 @@ class pdb(object):
         None.
       if _result_type = DICT:
         A key-model dictionary
-      if _result_type = KEY_NAME_DICT
+      if _result_type = NAME_DICT
         A key_name-model dictionary / str(id)-model dictionary
         
     Raises:
@@ -455,7 +455,7 @@ class pdb(object):
           None.
         if _result_type = DICT:
           A key-model dictionary
-        if _result_type = KEY_NAME_DICT
+        if _result_type =  NAME_DICT
           A key_name-model dictionary / str(id)-model dictionary
   
       Raises:
