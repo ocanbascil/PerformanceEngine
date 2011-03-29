@@ -15,7 +15,7 @@ to increase developer performance.
 
 Requirements
 -------------
-* cachepy => http://appengine-cookbook.appspot.com/recipe/cachepy-faster-than-memcache-and-unlimited-quota/
+* [cachepy](http://appengine-cookbook.appspot.com/recipe/cachepy-faster-than-memcache-and-unlimited-quota/)
 
 What is it good for?
 -------------------
@@ -158,6 +158,10 @@ When we do a pdb.get along with the following parameters a cascaded cache update
 To disable this update behavior use:
 	
 	pdb.get(keys,_cache_refresh=None)
+	
+Examples
+---------
+There aren't any example projects but PerformanceEngine is heavily used in [TweetHit](https://github.com/ocanbascil/TweetHit).
 	
 Known Bugs
 ------------------
