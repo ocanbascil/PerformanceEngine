@@ -143,6 +143,7 @@ Cascaded cache refresh
 ------------------------
 By default, a pdb.get() operation will first try to get from memcache and then datastore. It also updates memcache if models for the given keys are found in datastore but not in memcache. You can also add local cache support to this operation.
 Let's say we have 3 keys, db_key,memcache_key and local_key that correspond to 3 different models of the same kind. Let's assume that model with db_key is stored in datastore, memcache_key store in memcache and so on...
+
 When we do a pdb.get along with the following parameters a cascaded cache update operation is started.
 
 	keys = [db_key,memcache_key,local_key]
