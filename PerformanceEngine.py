@@ -38,7 +38,7 @@ ALL_CACHE = [MEMCACHE,LOCAL]
 '''Constants for result types'''
 LIST = 'list'
 DICT = 'dict'
-KEY_NAME_DICT = 'key_name_dict'
+NAME_DICT = 'name_dict'
 
 LOCAL_EXPIRATION = 0
 MEMCACHE_EXPIRATION = 0
@@ -311,7 +311,7 @@ class pdb(object):
       return result[0]
     elif _result_type == DICT:
       return models
-    elif _result_type == KEY_NAME_DICT:
+    elif _result_type == NAME_DICT:
       result = {}
       for k,v in models.iteritems():
         result[id_or_name(k)] = v
@@ -651,7 +651,7 @@ class ResultTypeError(Exception):
   def __init__(self,type):
     self.type = type
   def __str__(self):
-    return  'Result type is invalid: %s. Valid values are "list" and "dict" and "key_name dict"' %self.type
+    return  'Result type is invalid: %s. Valid values are "list" and "dict" and "name_dict"' %self.type
   
 class StorageSubsetError(Exception):  
   def __init__(self,cache,storage_list):
