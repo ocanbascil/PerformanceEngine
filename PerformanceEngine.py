@@ -33,6 +33,7 @@ DATASTORE = 'datastore'
 MEMCACHE = 'memcache'
 LOCAL = 'local'
 ALL_LEVELS = [DATASTORE,MEMCACHE,LOCAL]
+ALL_CACHE = [MEMCACHE,LOCAL]
 
 '''Constants for result types'''
 LIST = 'list'
@@ -41,9 +42,28 @@ KEY_NAME_DICT = 'key_name_dict'
 
 LOCAL_EXPIRATION = 0
 MEMCACHE_EXPIRATION = 0
+DATASTORE_EXPIRATION = 300 #Expiration for cached query results
 
 none_filter  = lambda dict : [k for k,v in dict.iteritems() if v is None]
 
+def dict_multi_get(keys,dict):
+  result = []
+  for key in keys:
+    try:
+      value = dict[key]
+      if value is not None:
+        result.append(value)
+    except KeyError:
+      pass
+  return result
+
+def validate_cache_refresh(cache_list,storage_list):
+  for cache in cache_list:
+    if cache not in ALL_CACHE:
+      raise CacheRefreshError(cache)
+    if cache not in storage_list:
+      raise StorageSubsetError(cache,storage_list)
+    
 def validate_storage(storage_list):
   for storage in storage_list:
     if storage not in ALL_LEVELS:
@@ -190,12 +210,16 @@ def _memcache_delete(keys):
   '''Delete models with given keys from memcache'''
   memcache.delete_multi(keys)
   
-  
 class pdb(object):
   '''Wrapper class for google.appengine.ext.db with seamless cache support'''
   
   @classmethod
-  def get(cls,keys,_storage = ALL_LEVELS,_result_type=LIST,**kwds):
+  def get(cls,keys,_storage = [MEMCACHE,DATASTORE],
+          _cache_refresh = MEMCACHE,
+          _local_expiration = LOCAL_EXPIRATION,
+          _memcache_expiration = MEMCACHE_EXPIRATION,
+          _result_type=LIST,
+          **kwds):
     """Fetch the specific Model instance with the given keys from 
     given storage layers in given format. 
     
@@ -205,6 +229,7 @@ class pdb(object):
   
     Args:
       _storage: string or array of strings for target storage layers.
+      _cache_refresh: cache layers to refresh after a successful get operation
       _result_type: format of the result 
       
       Inherited:
@@ -222,28 +247,57 @@ class pdb(object):
         A key-model dictionary
       if _result_type = KEY_NAME_DICT
         A key_name-model dictionary / str(id)-model dictionary
+        
+    Raises:
+      ResultTypeError: if an invalid result type is supplied
+      CacheRefreshError: if an invalid cache refresh parameter is given
+      StorageSubsetError: if a cache refresh parameter that was not in 
+        storage parameters is supplied
+      StorageLayerError: If an invalid storage parameter is given  
+      KeyParameterError: If something other than db.Key or string repr.
+        of db.Key is given
     """
     _storage = _to_list(_storage)
+    _cache_refresh = _to_list(_cache_refresh)
     validate_storage(_storage)
+    validate_cache_refresh(_cache_refresh,_storage)
     
     keys = map(key_str, _to_list(keys))
     old_keys = keys
-    result = []
+    local_not_found = []
+    memcache_not_found = []
     models = {}
     
     if LOCAL in _storage:
-        models = dict(models,**_cachepy_get(keys))
-        keys = none_filter(models)
+      models = dict(models,**_cachepy_get(keys))
+      keys = none_filter(models)
+      local_not_found = keys
           
     if MEMCACHE in _storage and len(keys):
-        models = dict(models,**_memcache_get(keys))
-        keys = none_filter(models)
+      models = dict(models,**_memcache_get(keys))
+      keys = none_filter(models)
+      memcache_not_found = keys
     
     if DATASTORE in _storage and len(keys):
-        db_results = [model for model in db.get(keys) if model is not None]
-        if len(db_results):
-          models  = dict(models,**_to_dict(db_results))
+      db_results = [model for model in db.get(keys) if model is not None]
+      if len(db_results):
+        models  = dict(models,**_to_dict(db_results))
+        
+    if LOCAL in _cache_refresh:
+      targets = dict_multi_get(local_not_found, models)
+      if len(targets):
+        print 'refreshing local cache %s' %targets
+        pdb.put(targets,_storage = LOCAL,
+                _local_expiration = _local_expiration,**kwds)  
     
+    if MEMCACHE in _cache_refresh:
+      targets = dict_multi_get(memcache_not_found,models)
+      if len(targets):
+        print 'refreshing memcache %s' %targets        
+        pdb.put(targets,_storage = MEMCACHE,
+                _memcache_expiration = _memcache_expiration,**kwds)
+        
+    result = []    
     if _result_type == LIST:
       #Restore the order of entities   
       for key in old_keys:
@@ -267,7 +321,7 @@ class pdb(object):
         
 
   @classmethod
-  def put(cls,models,_storage = ALL_LEVELS,
+  def put(cls,models,_storage = [MEMCACHE,DATASTORE],
                       _local_expiration = LOCAL_EXPIRATION,
                       _memcache_expiration = MEMCACHE_EXPIRATION,
                        **kwds):
@@ -542,8 +596,54 @@ class pdb(object):
       for k,v in self.properties().iteritems():
         logging.info('%s : %s' %(k,v.get_value_for_datastore(self)))  
   
-  class GqlQuery(db.GqlQuery):
-    '''Cached query results coming soon'''
+
+class _GqlCache(pdb.Model):
+  
+  _default_delimiter = '|'
+  
+  def __init__(self,models,**kwds):
+    self.model_string = serialize(models)
+    super(pdb.Model, self).__init__(**kwds)
+    
+  @classmethod
+  def build_key_name(cls,*args,**kwds):
+    arr = []
+    arr.extend(args)
+    arr = map(str,arr)
+    if len(kwds):
+      sorted_keys = sorted(kwds.keys())
+      for key in sorted_keys:
+        value = kwds[key]
+        if isinstance(value, db.Model):
+          value = value.key()
+        arr.append(key+cls._default_delimiter+str(value))
+  
+    print arr
+    print hash(''.join(arr))
+    
+  @property
+  def models(self):
+    return deserialize(self.model_string)
+
+  model_string = db.BlobProperty()
+  add_time = db.DateTimeProperty(auto_now=True)
+
+class QueryRunner(object):
+  
+  def __init__(self,query,*args,**kwds):
+    self.query = query
+    self.query.bind(*args,**kwds)
+    self.key_name = _GqlCache.build_key_name(*args,**kwds)
+    
+  def fetch(self,limit,offset = 0,
+                  _storage = ALL_LEVELS,
+                  _result_type = LIST,
+                  _refresh_cache = ALL_LEVELS,
+                  _local_expiration=LOCAL_EXPIRATION,
+                  _memcache_expiration = MEMCACHE_EXPIRATION,
+                  _datastore_expiration = 0):
+    
+    
     pass
 
 
@@ -552,6 +652,21 @@ class ResultTypeError(Exception):
     self.type = type
   def __str__(self):
     return  'Result type is invalid: %s. Valid values are "list" and "dict" and "key_name dict"' %self.type
+  
+class StorageSubsetError(Exception):  
+  def __init__(self,cache,storage_list):
+    self.storage_list = storage_list
+    self.cache = cache
+  def __str__(self):
+    return  'Cache refresh operation called for layer \'%s\', which was not present \
+in storage layers: %s. Include that layer into _storage parameters or call \
+pdb.put explicitly for that layer"' %(self.cache,self.storage_list)
+  
+class CacheRefreshError(Exception):
+  def __init__(self,storage):
+    self.storage = storage
+  def __str__(self):
+    return  'Cache name invalid: %s. Valid values are "local" and "memcache"' %self.storage
  
 class StorageLayerError(Exception):
   def __init__(self,storage):
