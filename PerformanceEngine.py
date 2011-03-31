@@ -34,7 +34,6 @@ DATASTORE = 'datastore'
 MEMCACHE = 'memcache'
 LOCAL = 'local'
 ALL_LEVELS = [DATASTORE,MEMCACHE,LOCAL]
-ALL_CACHE = [MEMCACHE,LOCAL]
 
 '''Constants for result types'''
 LIST = 'list'
@@ -43,11 +42,11 @@ NAME_DICT = 'name_dict'
 
 LOCAL_EXPIRATION = 0
 MEMCACHE_EXPIRATION = 0
-DATASTORE_EXPIRATION = 300 #Expiration for cached query results
 
 none_filter  = lambda dict : [k for k,v in dict.iteritems() if v is None]
 
-def dict_multi_get(keys,dict):
+def _dict_multi_get(keys,dict):
+  '''Used for cascaded cache refresh operation'''
   result = []
   for key in keys:
     try:
@@ -58,20 +57,20 @@ def dict_multi_get(keys,dict):
       pass
   return result
   
-def validate_storage(storage_list):
+def _validate_storage(storage_list):
   for storage in storage_list:
     if storage not in ALL_LEVELS:
       raise StorageLayerError(storage)
 
-def key_str(param):
+def _key_str(param):
   '''Utility function that extracts a string key from a model or key instance'''
   try:
     return str(db._coerce_to_key(param))
   except db.BadArgumentError:
     raise KeyParameterError(param)
   
-def id_or_name(key_str):
-  key = db.Key(key_str)
+def _id_or_name(_key_str):
+  key = db.Key(_key_str)
   return key.name() or str(key.id())
 
 def _diff(list1,list2):
@@ -91,10 +90,10 @@ def _to_dict(models):
   '''Utility method to create identifier:model dictionary'''
   result = {}
   for model in models:
-    result[key_str(model)] = model
+    result[_key_str(model)] = model
   return result
 
-def serialize(models):
+def _serialize(models):
   '''Improve memcache performance converting to protobuf'''
   if models is None:
     return None
@@ -105,7 +104,7 @@ def serialize(models):
     # A list
     return [db.model_to_protobuf(x).Encode() for x in models]
 
-def deserialize(data):
+def _deserialize(data):
   '''Improve memcache performance by converting from protobuf'''
   if data is None:
     return None
@@ -175,7 +174,7 @@ def _memcache_get(keys):
   result = {}
   for key in keys:
     try:
-      result[key] = deserialize(cache_results[key])
+      result[key] = _deserialize(cache_results[key])
     except KeyError:
       result[key] = None
   return result
@@ -195,7 +194,7 @@ def _memcache_put(models,time = 0):
   to_put = _to_dict(models)
         
   for key,model in to_put.iteritems():
-      to_put[key] = serialize(model)
+      to_put[key] = _serialize(model)
           
   memcache.set_multi(to_put,time)
   return to_put.keys()
@@ -224,7 +223,12 @@ class pdb(object):
   
     Args:
       _storage: string or array of strings for target storage layers.
-      _cache_refresh: cache layers to refresh after a successful get operation
+      _local_cache_refresh: Flag for refreshing local instance cache
+      _memcache_refresh: Flag for refreshing memcache
+      _local_expiration: Time for local cache expiration in seconds
+                              Has no effect if _local_cache_refresh = False
+      _memcache_expiration: Time for memcache expiration in seconds
+                              Has no effect if _memcache_refresh = False
       _result_type: format of the result 
       
       Inherited:
@@ -245,17 +249,14 @@ class pdb(object):
         
     Raises:
       ResultTypeError: if an invalid result type is supplied
-      CacheRefreshError: if an invalid cache refresh parameter is given
-      StorageSubsetError: if a cache refresh parameter that was not in 
-        storage parameters is supplied
       StorageLayerError: If an invalid storage parameter is given  
       KeyParameterError: If something other than db.Key or string repr.
         of db.Key is given
     """
     _storage = _to_list(_storage)
-    validate_storage(_storage)
+    _validate_storage(_storage)
     
-    keys = map(key_str, _to_list(keys))
+    keys = map(_key_str, _to_list(keys))
     old_keys = keys
     local_not_found = []
     memcache_not_found = []
@@ -277,13 +278,13 @@ class pdb(object):
         models  = dict(models,**_to_dict(db_results))
         
     if _local_cache_refresh:
-      targets = dict_multi_get(local_not_found, models)
+      targets = _dict_multi_get(local_not_found, models)
       if len(targets):
         pdb.put(targets,_storage = LOCAL,
                 _local_expiration = _local_expiration,**kwds)  
     
     if _memcache_refresh:
-      targets = dict_multi_get(memcache_not_found,models)
+      targets = _dict_multi_get(memcache_not_found,models)
       if len(targets):  
         pdb.put(targets,_storage = MEMCACHE,
                 _memcache_expiration = _memcache_expiration,**kwds)
@@ -305,7 +306,7 @@ class pdb(object):
     elif _result_type == NAME_DICT:
       result = {}
       for k,v in models.iteritems():
-        result[id_or_name(k)] = v
+        result[_id_or_name(k)] = v
       return result
     else:
       raise ResultTypeError(_result_type)
@@ -346,7 +347,7 @@ class pdb(object):
     keys = [] 
     models = _to_list(models)   
     _storage = _to_list(_storage)
-    validate_storage(_storage)
+    _validate_storage(_storage)
     
     try: 
       _to_dict(models)
@@ -383,9 +384,9 @@ class pdb(object):
         models: Model instance, key, key string or iterable thereof.
         config: datastore_rpc.Configuration to use for this request.
     """
-    keys = map(key_str, _to_list(keys))
+    keys = map(_key_str, _to_list(keys))
     _storage = _to_list(_storage)
-    validate_storage(_storage)  
+    _validate_storage(_storage)  
     
     if DATASTORE in _storage:
       db.delete(keys)
@@ -429,11 +430,9 @@ class pdb(object):
     @classmethod
     def get(cls,keys,**kwds):
       '''Fetch a specific Model type instance from given storage 
-      layers, using keys.
-         
-      Args: 
-        _storage: string or array of strings for target storage layers.
-        _result_type: format of the result 
+      layers, using keys. 
+      Args:
+        See pdb.get
         
         Inherited:
           keys: Key within datastore entity collection to find; or string key;
@@ -441,19 +440,11 @@ class pdb(object):
           config: datastore_rpc.Configuration to use for this request.
   
       Returns:
-        if _result_type = LIST:
-          If a single key was given: a Model instance associated with key
-          for if it exists in the datastore, otherwise None; if a list of
-          keys was given: a list whose items are either a Model instance or
-          None.
-        if _result_type = DICT:
-          A key-model dictionary
-        if _result_type =  NAME_DICT
-          A key_name-model dictionary / str(id)-model dictionary
-  
+        See pdb.get
+        
       Raises:
         KindError if any of the retreived objects are not instances of the
-        type associated with call to 'get'.
+          type associated with call to 'get'.
       '''
       models = pdb.get(keys,**kwds)
       
@@ -480,10 +471,8 @@ class pdb(object):
     @classmethod
     def get_by_key_name(cls,key_names, parent=None,**kwds):
       """Get instance of Model class by its key's name from the given storage layers.
-  
       Args:
-        _storage: string or array of strings for target storage layers
-        _result_type: format of the result 
+          See pdb.get
         
         Inherited:
           key_names: A single key-name or a list of key-names.
@@ -495,7 +484,7 @@ class pdb(object):
         raise db.BadArgumentError(str(e))
       
       key_names = _to_list(key_names)
-      key_strings = [key_str(db.Key.from_path(cls.kind(), name, parent=parent))
+      key_strings = [_key_str(db.Key.from_path(cls.kind(), name, parent=parent))
         for name in key_names]
 
       return pdb.get(key_strings,**kwds)
@@ -503,10 +492,8 @@ class pdb(object):
     @classmethod
     def get_by_id(cls, ids, parent=None,**kwds):
       """Get instance of Model class by id from the given storage layers.
-  
       Args:
-         _storage: string or array of strings for target storage layers
-         _result_type: format of the result 
+         See pdb.get
          
         Inherited:
           ids: A single id or a list of ids.
@@ -518,7 +505,7 @@ class pdb(object):
         raise db.BadArgumentError(str(e))
       
       ids = _to_list(ids)
-      key_strings = [key_str(datastore.Key.from_path(cls.kind(), id, parent=parent))
+      key_strings = [_key_str(datastore.Key.from_path(cls.kind(), id, parent=parent))
         for id in ids]
       
       return pdb.get(key_strings,**kwds)
@@ -527,10 +514,14 @@ class pdb(object):
     def get_or_insert(cls,key_name,**kwds):
       '''Retrieve or create an instance of Model class using the given storage layers.
       
+      If entity is found, it is returned and also cache layers are refreshed if the result
+      isn't found in them. 
+      
+      If entity is not found, a new one is created an written into given storage layers.
+      
       Args:
-        _storage: string or array of strings for target storage layers  
-        _local_expiration: Time in seconds for local cache expiration for models
-        _memcache_expiration: Time in seconds for memcache expiration for models
+        See pdb.get
+        
         Inherited:
           key_name: Key name to retrieve or create.
           **kwds: Keyword arguments to pass to the constructor of the model class
@@ -557,7 +548,25 @@ class pdb(object):
       else:
         return entity
       
-    def cached_set(self,collection_name,_memcache_expiration=300):
+    def cached_set(self,collection_name,_index_expiration=300,**kwds):
+      '''This function is a wrapper around back-reference functionality of 
+      db.ReferenceProperty,allowing cached retrieval of models that reference 
+      this entity.
+      
+      If a _ReferenceCacheIndex is found, a default pdb.get function is called
+      Otherwise  the query is run and results are returned
+      
+      WARNING: Instead of a query instance, this function fetches and returns 
+      the actual models, so it is advised not to use it for models that have 
+      a high number of back-references.
+      
+      Args:
+      
+      Returns:
+      
+      Raises:
+      
+      '''
       property = getattr(self, collection_name)
       if not isinstance(property, db.Query):
         raise ReferenceSetError(collection_name)
@@ -568,39 +577,11 @@ class pdb(object):
                                                          _storage=MEMCACHE)
       if query_cache:
         keys = query_cache.ref_keys
-        result =  pdb.get(keys)
+        result =  pdb.get(keys,**kwds)
       else: 
         result = [model for model in getattr(self,collection_name)]
-        _ReferenceCacheIndex.create(self,collection_name,result,_memcache_expiration)
+        _ReferenceCacheIndex.create(self,collection_name,result,_index_expiration)
       return result    
-
-    def clone_entity(self,**extra_args):
-      """Clones an entity, adding or overriding constructor attributes.
-          From: http://stackoverflow.com/questions/2687724/
-          copy-an-entity-in-google-app-engine-datastore-in-python-without-knowing-property
-          
-          The cloned entity will have exactly the same property values as the original
-          entity, except where overridden. By default it will have no parent entity or
-          key name, unless supplied.
-      
-      Args:
-          e: The entity to clone
-          extra_args: Keyword arguments to override from the cloned entity and pass
-          to the constructor.
-      Returns:
-          A cloned, possibly modified, copy of entity e.
-        """
-      klass = self.__class__
-      props = {}
-        
-      for k,v in klass.properties().iteritems():
-        if isinstance(v, db.ReferenceProperty):
-          props[k] = v.get_value_for_datastore(self)
-        else:
-          props[k] = v.__get__(self,klass)
-              
-      props.update(extra_args)
-      return klass(**props)
     
     def log_properties(self):
       '''Log properties of an entity'''
@@ -632,7 +613,7 @@ class _GqlCache(pdb.Model):
   not implemented yet'''
     
   def __init__(self,models,**kwds):
-    self.model_string = serialize(models)
+    self.model_string = _serialize(models)
     super(pdb.Model, self).__init__(**kwds)
     
   @classmethod
@@ -653,7 +634,7 @@ class _GqlCache(pdb.Model):
     
   @property
   def models(self):
-    return deserialize(self.model_string)
+    return _deserialize(self.model_string)
 
   model_string = db.BlobProperty()
   add_time = db.DateTimeProperty(auto_now=True)
