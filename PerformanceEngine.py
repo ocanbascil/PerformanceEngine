@@ -566,22 +566,17 @@ class pdb(object):
       
     def cached_set(self,collection_name,_memcache_expiration=300):
       property = getattr(self, collection_name)
-      print property
-      print type(property)
       if not isinstance(property, db.Query):
         raise ReferenceSetError(collection_name)
       
       klass = self.__class__
       key_name = str(self.key())+klass._default_delimiter+collection_name
-      print 'Cached set key_name %s' %key_name
       query_cache = _ReferenceCacheIndex.get_by_key_name(key_name,
                                                          _storage=MEMCACHE)
       if query_cache:
-        print 'Returning from cache'
         keys = query_cache.ref_keys
         result =  pdb.get(keys)
       else: 
-        print 'Running query'
         result = [model for model in getattr(self,collection_name)]
         _ReferenceCacheIndex.create(self,collection_name,result,_memcache_expiration)
       return result    
@@ -623,7 +618,7 @@ class _ReferenceCacheIndex(pdb.Model):
   one-to-many relationship that uses db.ReferenceProperty
   through cache, instead of running a db.Query. 
   
-  An instance of this class is saved into memcache for 
+  An instance of this class is saved into memcache
   when 'cached_set' property of a pdb.Model is called.
   '''
   ref_keys = db.ListProperty(db.Key,indexed = False)
@@ -635,7 +630,6 @@ class _ReferenceCacheIndex(pdb.Model):
     entity.ref_keys = [model.key() for model in models]
     entity.put(_storage=MEMCACHE,
                _memcache_expiration = _memcache_expiration)    
-    print 'Created Ref cache index %s' %entity.key().name()
     return entity
 
 class _GqlCache(pdb.Model):
