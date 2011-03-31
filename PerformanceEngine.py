@@ -1,6 +1,7 @@
 # Copyright (C) 2011 O. Can Bascil <ocanbascil at gmail com>
 """
 PerformanceEngine
+https://github.com/ocanbascil/Performance-AppEngine
 ==============================
     PerformanceEngine is a simple wrapper module that enables layered 
     data model storage in Google Application Engine. Its main goal is to 
@@ -56,14 +57,7 @@ def dict_multi_get(keys,dict):
     except KeyError:
       pass
   return result
-
-def validate_cache_refresh(cache_list,storage_list):
-  for cache in cache_list:
-    if cache not in ALL_CACHE:
-      raise CacheRefreshError(cache)
-    if cache not in storage_list:
-      raise StorageSubsetError(cache,storage_list)
-    
+  
 def validate_storage(storage_list):
   for storage in storage_list:
     if storage not in ALL_LEVELS:
@@ -215,7 +209,8 @@ class pdb(object):
   
   @classmethod
   def get(cls,keys,_storage = [MEMCACHE,DATASTORE],
-          _cache_refresh = MEMCACHE,
+          _memcache_refresh = True,
+          _local_cache_refresh = False,
           _local_expiration = LOCAL_EXPIRATION,
           _memcache_expiration = MEMCACHE_EXPIRATION,
           _result_type=LIST,
@@ -258,9 +253,7 @@ class pdb(object):
         of db.Key is given
     """
     _storage = _to_list(_storage)
-    _cache_refresh = _to_list(_cache_refresh)
     validate_storage(_storage)
-    validate_cache_refresh(_cache_refresh,_storage)
     
     keys = map(key_str, _to_list(keys))
     old_keys = keys
@@ -283,13 +276,13 @@ class pdb(object):
       if len(db_results):
         models  = dict(models,**_to_dict(db_results))
         
-    if LOCAL in _cache_refresh:
+    if _local_cache_refresh:
       targets = dict_multi_get(local_not_found, models)
       if len(targets):
         pdb.put(targets,_storage = LOCAL,
                 _local_expiration = _local_expiration,**kwds)  
     
-    if MEMCACHE in _cache_refresh:
+    if _memcache_refresh:
       targets = dict_multi_get(memcache_not_found,models)
       if len(targets):  
         pdb.put(targets,_storage = MEMCACHE,
@@ -583,7 +576,9 @@ class pdb(object):
 
     def clone_entity(self,**extra_args):
       """Clones an entity, adding or overriding constructor attributes.
-      
+          From: http://stackoverflow.com/questions/2687724/
+          copy-an-entity-in-google-app-engine-datastore-in-python-without-knowing-property
+          
           The cloned entity will have exactly the same property values as the original
           entity, except where overridden. By default it will have no parent entity or
           key name, unless supplied.
@@ -633,6 +628,8 @@ class _ReferenceCacheIndex(pdb.Model):
     return entity
 
 class _GqlCache(pdb.Model):
+  '''This class will be used for db.GqlQuery result caching,
+  not implemented yet'''
     
   def __init__(self,models,**kwds):
     self.model_string = serialize(models)
@@ -692,21 +689,6 @@ class ReferenceSetError(Exception):
   def __str__(self):
     return  'Entity does not have a reference set called "%s"' %self.type 
   
-class StorageSubsetError(Exception):  
-  def __init__(self,cache,storage_list):
-    self.storage_list = storage_list
-    self.cache = cache
-  def __str__(self):
-    return  'Cache refresh operation called for layer \'%s\', which was not present \
-in storage layers: %s. Include that layer into _storage parameters or call \
-pdb.put explicitly for that layer"' %(self.cache,self.storage_list)
-  
-class CacheRefreshError(Exception):
-  def __init__(self,storage):
-    self.storage = storage
-  def __str__(self):
-    return  'Cache name invalid: %s. Valid values are "local" and "memcache"' %self.storage
- 
 class StorageLayerError(Exception):
   def __init__(self,storage):
     self.storage = storage
