@@ -286,14 +286,12 @@ class pdb(object):
     if LOCAL in _cache_refresh:
       targets = dict_multi_get(local_not_found, models)
       if len(targets):
-        print 'refreshing local cache %s' %targets
         pdb.put(targets,_storage = LOCAL,
                 _local_expiration = _local_expiration,**kwds)  
     
     if MEMCACHE in _cache_refresh:
       targets = dict_multi_get(memcache_not_found,models)
-      if len(targets):
-        print 'refreshing memcache %s' %targets        
+      if len(targets):  
         pdb.put(targets,_storage = MEMCACHE,
                 _memcache_expiration = _memcache_expiration,**kwds)
         
@@ -409,6 +407,8 @@ class pdb(object):
   class Model(db.Model):
     '''Wrapper class for db.Model
     Adds cached storage support to common functions'''
+    
+    _default_delimiter = '|'
     
     def put(self,**kwds):
       """Writes this model instance to the given storage layers.
@@ -564,6 +564,8 @@ class pdb(object):
         return db.run_in_transaction(txn)
       else:
         return entity
+      
+    
 
     def clone_entity(self,**extra_args):
       """Clones an entity, adding or overriding constructor attributes.
@@ -596,6 +598,24 @@ class pdb(object):
       for k,v in self.properties().iteritems():
         logging.info('%s : %s' %(k,v.get_value_for_datastore(self)))  
   
+
+class _ObjectSetCacheIndex(pdb.Model):
+  '''This model is used for accessing the 'many' part of a 
+  one-to-many relationship that uses db.ReferenceProperty
+  through cache, instead of running a db.Query. 
+  
+  An instance of this class is saved into memcache for 
+  5 mins (default) when 'cached_set' property of a pdb.Model is called.
+  '''
+   
+  ref_keys = db.ListProperty(db.Key,indexed = False)
+  
+  @classmethod
+  def create(cls,reference,collection_name,models):
+    entity = cls(key_name=str(reference.key())+'|'+collection_name)
+    entity.ref_keys = [model.key() for model in models]
+    entity.put(_storage='memcache',_memcache_expiration = 300)    
+    return entity
 
 class _GqlCache(pdb.Model):
   
