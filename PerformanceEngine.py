@@ -554,11 +554,23 @@ class pdb(object):
       this entity.
       
       If a _ReferenceCacheIndex is found, a default pdb.get function is called
-      Otherwise  the query is run and results are returned
+      Otherwise  the query is run and models are returned
       
       WARNING: Instead of a query instance, this function fetches and returns 
       the actual models, so it is advised not to use it for models that have 
       a high number of back-references.
+      
+      Basic Usage:
+        class MainModel(pdb.Model):
+          add_date = db.DateProperty(auto_now = True) 
+        
+        class RefModel(db.Model):
+          ref = db.ReferenceProperty(reference_class=MainModel,
+                                              collection_name = 'ref_set')
+                                              
+        model = MainModel.all().get()
+        model.ref_set #models that reference this MainModel entity
+        model.cached_set('ref_set') #Cached back-references
       
       Args:
       
@@ -576,17 +588,27 @@ class pdb(object):
       query_cache = _ReferenceCacheIndex.get_by_key_name(key_name,
                                                          _storage=MEMCACHE)
       if query_cache:
+        print 'cached results'
         keys = query_cache.ref_keys
         result =  pdb.get(keys,**kwds)
       else: 
+        print 'db query'
         result = [model for model in getattr(self,collection_name)]
         _ReferenceCacheIndex.create(self,collection_name,result,_index_expiration)
       return result    
     
-    def log_properties(self):
+    def log_properties(self,console=False):
       '''Log properties of an entity'''
+      result = 'Logging properties for %s with identifier: %s =>' \
+      %(self.__class__.kind(),_id_or_name(str(self.key())))
       for k,v in self.properties().iteritems():
-        logging.info('%s : %s' %(k,v.get_value_for_datastore(self)))  
+        prop = '%s : %s' %(k,v.get_value_for_datastore(self))
+        result += '('+prop+'),'
+      if console:
+        print result
+      else:
+        logging.info(result)
+
   
 
 class _ReferenceCacheIndex(pdb.Model):
