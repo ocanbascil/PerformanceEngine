@@ -1,5 +1,5 @@
-Performance Engine
-===============
+Performance Engine (v0.7)
+====================
 
 What is it?
 ----------
@@ -9,6 +9,7 @@ data model storage on Google Application Engine.
 Features
 ---------
 * Layered data storage (local,memcache or datastore).
+* Models that live in cache only (local or memcache).
 * Seamless integration into existing projects (call pdb.put instead of db.put).
 * Different result types (list, key-model dict,name-model dict)
 to increase developer performance.
@@ -46,7 +47,7 @@ A get() function will try to get entities from memcache first, failing that, it 
 	#Key for an entity that's in datastore
 	keys.append(new_db_key) 
 	
-model1 & model2 is retrieved from memcache but model for new_db_key is retrieved from datastore. It is also saved into memcache for future calls
+model1 & model2 is retrieved from memcache but model for new_db_key is retrieved from datastore. It is also saved into memcache for future calls.
 	
 	pdb.get(keys)
 
@@ -76,6 +77,22 @@ Get the model from datastore and update memcache.
 Next call for same model will return value in the memcache
 
 	TestModel.get(other_key) 
+	
+Utility methods
+---------------
+* log_properties: Logs properties of a pdb.Model into console or application log
+* cached_set: Tries to get entities that back-reference this instance from cache
+	    
+	    class MainModel(pdb.Model):
+          add_date = db.DateProperty(auto_now = True) 
+        
+        class RefModel(db.Model):
+          ref = db.ReferenceProperty(reference_class=MainModel,
+                                              collection_name = 'ref_set')
+                                              
+        model = MainModel.all().get()
+        model.ref_set #models that reference this MainModel entity
+        model.cached_set('ref_set',_storage=['local','memcache']) #Cached back-references
 	
 Result Types
 ==========
@@ -147,7 +164,7 @@ Let's say we have 3 keys, db_key,memcache_key and local_key that correspond to 3
 When we do a pdb.get along with the following parameters a cascaded cache update operation is started.
 
 	keys = [db_key,memcache_key,local_key]
-	pdb.get(keys,_storage=['local','memcache','datastore'],_cache_refresh=['local','memcache'])
+	pdb.get(keys,_storage=['local','memcache','datastore'],_local_cache_refresh=True,_memcache_refresh=True)
 	
 * For db_key, the model is retrieved from datastore and written into both memcache and local cache.
 * For memcache_key, the model is retrieved from memcache and written into local cache.
@@ -157,7 +174,7 @@ When we do a pdb.get along with the following parameters a cascaded cache update
 
 To disable this update behavior use:
 	
-	pdb.get(keys,_cache_refresh=None)
+	pdb.get(keys,_memcache_refresh=False) #_local_cache_refresh is False by default
 	
 Examples
 ---------
@@ -174,4 +191,5 @@ the license in the LICENSE file.
 
 Contact
 --------
-ocanbascil at gmail dot com
+Mail: ocanbascil at gmail dot com
+[Follow me on Twitter](http://twitter.com/#!/ocanbascil)
