@@ -178,7 +178,7 @@ To disable this update behavior use:
 	
 Examples
 ---------
-There aren't any example projects but PerformanceEngine is heavily used in [TweetHit](https://github.com/ocanbascil/TweetHit).
+There aren't any example projects (yet) but PerformanceEngine is heavily used in [TweetHit](https://github.com/ocanbascil/TweetHit).
 	
 Known Bugs
 ------------------
@@ -191,5 +191,5 @@ the license in the LICENSE file.
 
 Contact
 --------
-Mail: ocanbascil at gmail dot com
-[Follow me on Twitter](http://twitter.com/#!/ocanbascil)
+* Email: ocanbascil at gmail dot com
+* [Follow me on Twitter](http://twitter.com/#!/ocanbascil)

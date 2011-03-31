@@ -624,7 +624,7 @@ class _ReferenceCacheIndex(pdb.Model):
   through cache, instead of running a db.Query. 
   
   An instance of this class is saved into memcache
-  when 'cached_set' property of a pdb.Model is called.
+  when 'cached_set' method of a pdb.Model is called.
   '''
   ref_keys = db.ListProperty(db.Key,indexed = False)
   
