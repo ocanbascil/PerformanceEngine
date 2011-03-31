@@ -548,7 +548,7 @@ class pdb(object):
       else:
         return entity
       
-    def cached_set(self,collection_name,_index_expiration=300,**kwds):
+    def cached_set(self,collection_name,index_expiration=300,**kwds):
       '''This function is a wrapper around back-reference functionality of 
       db.ReferenceProperty,allowing cached retrieval of models that reference 
       this entity.
@@ -573,11 +573,17 @@ class pdb(object):
         model.cached_set('ref_set') #Cached back-references
       
       Args:
-      
+        collection_name: Name of the back reference property
+        index_expiration: Memcache expiration time for _ReferenceCacheIndex
+        entity that'll be created for this reference set if there isn't any.
+        
+        See pdb.get for additional parameters
+        
       Returns:
+        A list of models that back reference this entity
       
       Raises:
-      
+        ReferenceSetError: If an invalid collection name is supplied
       '''
       property = getattr(self, collection_name)
       if not isinstance(property, db.Query):
@@ -588,13 +594,15 @@ class pdb(object):
       query_cache = _ReferenceCacheIndex.get_by_key_name(key_name,
                                                          _storage=MEMCACHE)
       if query_cache:
-        print 'cached results'
+        try:
+          kwds.pop('_result_type') #Use default result for pdb.get
+        except KeyError:
+          pass
         keys = query_cache.ref_keys
         result =  pdb.get(keys,**kwds)
       else: 
-        print 'db query'
         result = [model for model in getattr(self,collection_name)]
-        _ReferenceCacheIndex.create(self,collection_name,result,_index_expiration)
+        _ReferenceCacheIndex.create(self,collection_name,result,index_expiration)
       return result    
     
     def log_properties(self,console=False):
@@ -608,8 +616,6 @@ class pdb(object):
         print result
       else:
         logging.info(result)
-
-  
 
 class _ReferenceCacheIndex(pdb.Model):
   '''This model is used for accessing the 'many' part of a 
