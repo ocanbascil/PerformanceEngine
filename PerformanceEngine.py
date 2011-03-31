@@ -607,14 +607,15 @@ class _ObjectSetCacheIndex(pdb.Model):
   An instance of this class is saved into memcache for 
   5 mins (default) when 'cached_set' property of a pdb.Model is called.
   '''
-   
   ref_keys = db.ListProperty(db.Key,indexed = False)
   
   @classmethod
-  def create(cls,reference,collection_name,models):
-    entity = cls(key_name=str(reference.key())+'|'+collection_name)
+  def create(cls,reference,collection_name,
+             models,_memcache_expiration = 300):
+    entity = cls(key_name=str(reference.key())+cls._default_delimiter+collection_name)
     entity.ref_keys = [model.key() for model in models]
-    entity.put(_storage='memcache',_memcache_expiration = 300)    
+    entity.put(_storage=MEMCACHE,
+               _memcache_expiration = _memcache_expiration)    
     return entity
 
 class _GqlCache(pdb.Model):
@@ -672,6 +673,12 @@ class ResultTypeError(Exception):
     self.type = type
   def __str__(self):
     return  'Result type is invalid: %s. Valid values are "list" and "dict" and "name_dict"' %self.type
+  
+class ReferenceSetError(Exception):
+  def __init__(self,type):
+    self.type = type
+  def __str__(self):
+    return  'Entity does not have a reference set called %s"' %self.type 
   
 class StorageSubsetError(Exception):  
   def __init__(self,cache,storage_list):
