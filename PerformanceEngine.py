@@ -553,7 +553,6 @@ class pdb(object):
         TransactionFailedError if the specified Model instance could not be
         retrieved or created transactionally (due to high contention, etc).
       '''
-      
       def txn():
         entity = cls(key_name=key_name, **kwds)
         entity.put(**kwds)
@@ -565,7 +564,27 @@ class pdb(object):
       else:
         return entity
       
-    
+    def cached_set(self,collection_name,_memcache_expiration=300):
+      property = getattr(self, collection_name)
+      print property
+      print type(property)
+      if not isinstance(property, db.Query):
+        raise ReferenceSetError(collection_name)
+      
+      klass = self.__class__
+      key_name = str(self.key())+klass._default_delimiter+collection_name
+      print 'Cached set key_name %s' %key_name
+      query_cache = _ReferenceCacheIndex.get_by_key_name(key_name,
+                                                         _storage=MEMCACHE)
+      if query_cache:
+        print 'Returning from cache'
+        keys = query_cache.ref_keys
+        result =  pdb.get(keys)
+      else: 
+        print 'Running query'
+        result = [model for model in getattr(self,collection_name)]
+        _ReferenceCacheIndex.create(self,collection_name,result,_memcache_expiration)
+      return result    
 
     def clone_entity(self,**extra_args):
       """Clones an entity, adding or overriding constructor attributes.
@@ -599,29 +618,28 @@ class pdb(object):
         logging.info('%s : %s' %(k,v.get_value_for_datastore(self)))  
   
 
-class _ObjectSetCacheIndex(pdb.Model):
+class _ReferenceCacheIndex(pdb.Model):
   '''This model is used for accessing the 'many' part of a 
   one-to-many relationship that uses db.ReferenceProperty
   through cache, instead of running a db.Query. 
   
   An instance of this class is saved into memcache for 
-  5 mins (default) when 'cached_set' property of a pdb.Model is called.
+  when 'cached_set' property of a pdb.Model is called.
   '''
   ref_keys = db.ListProperty(db.Key,indexed = False)
   
   @classmethod
   def create(cls,reference,collection_name,
-             models,_memcache_expiration = 300):
+             models,_memcache_expiration):
     entity = cls(key_name=str(reference.key())+cls._default_delimiter+collection_name)
     entity.ref_keys = [model.key() for model in models]
     entity.put(_storage=MEMCACHE,
                _memcache_expiration = _memcache_expiration)    
+    print 'Created Ref cache index %s' %entity.key().name()
     return entity
 
 class _GqlCache(pdb.Model):
-  
-  _default_delimiter = '|'
-  
+    
   def __init__(self,models,**kwds):
     self.model_string = serialize(models)
     super(pdb.Model, self).__init__(**kwds)
@@ -678,7 +696,7 @@ class ReferenceSetError(Exception):
   def __init__(self,type):
     self.type = type
   def __str__(self):
-    return  'Entity does not have a reference set called %s"' %self.type 
+    return  'Entity does not have a reference set called "%s"' %self.type 
   
 class StorageSubsetError(Exception):  
   def __init__(self,cache,storage_list):
