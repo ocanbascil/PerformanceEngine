@@ -43,6 +43,7 @@ NAME_DICT = 'name_dict'
 
 LOCAL_EXPIRATION = 0
 MEMCACHE_EXPIRATION = 0
+QUERY_EXPIRATION = 300
 
 none_filter  = lambda dict : [k for k,v in dict.iteritems() if v is None]
 
@@ -214,6 +215,7 @@ class pdb(object):
           _local_expiration = LOCAL_EXPIRATION,
           _memcache_expiration = MEMCACHE_EXPIRATION,
           _result_type=LIST,
+          _key_check=True,
           **kwds):
     """Fetch the specific Model instance with the given keys from 
     given storage layers in given format. 
@@ -231,6 +233,8 @@ class pdb(object):
       _memcache_expiration: Time for memcache expiration in seconds
                               Has no effect if _memcache_refresh = False
       _result_type: format of the result 
+      _key_check: Used for forcing custom keys to override default
+                        behaviour, You'll probably break things if you change this
       
       Inherited:
         keys: Key within datastore entity collection to find; or string key;
@@ -257,7 +261,10 @@ class pdb(object):
     _storage = _to_list(_storage)
     _validate_storage(_storage)
     
-    keys = map(_key_str, _to_list(keys))
+    if _key_check:
+      keys = map(_key_str, _to_list(keys))
+    else:
+      keys = _to_list(keys)
     old_keys = keys
     local_not_found = []
     memcache_not_found = []
@@ -617,6 +624,100 @@ class pdb(object):
         print result
       else:
         logging.info(result)
+        
+  class BaseQuery(Model):
+    delim  = '|'
+    
+    def __init__(self,query_string,*args,**kwds):
+      self.query_string = query_string
+      self.key_name = str(hash(query_string))
+      print 'init %s' %self.key_name
+      self.query = db.GqlQuery(query_string)
+      if args or kwds:
+        self.bind(*args,**kwds)
+      
+    def bind(self,*args,**kwds):
+      self._clear_keyname()
+      self._create_suffix(*args,**kwds)
+      self.query.bind(*args,**kwds)
+      
+    def _concat_keyname(self,param):
+      klass = self.__class__
+      self.key_name += klass.delim+param
+      
+    def _clear_keyname(self,key=None):
+      print 'Clear Start %s, %s' %(self.key_name,key)
+      klass = self.__class__
+      delim_index = self.key_name.find(klass.delim)
+      
+      if key is not None:
+        key_index = self.key_name.find(key)
+        if key_index > 0:
+          delim_index = key_index-1
+
+      if delim_index > 0:
+        self.key_name = self.key_name[:delim_index]
+      
+      print 'Clear complete %s' %self.key_name
+        
+    def _create_suffix(self,*args,**kwds):
+      for item in args:
+        self._concat_keyname(self.repr_param(item))
+        
+      if len(kwds):
+        sorted_keys = sorted(kwds.keys())
+        for key in sorted_keys:
+          self._concat_keyname(self.repr_param(kwds[key]))
+    
+    def fetch(self,limit,offset=0,
+              cache=[MEMCACHE],
+              _local_expiration = QUERY_EXPIRATION,
+              _memcache_expiration = QUERY_EXPIRATION,**kwds):
+        
+      print 'Fetch called'
+      if DATASTORE in cache:
+        print 'WTF'
+        
+      self._clear_keyname('__offset')
+      self._clear_keyname('__limit')
+      
+      self._concat_keyname('__limit:'+str(limit))
+      if offset != 0:
+        self._concat_keyname('__offset:'+str(offset))
+
+      print 'Fetching with key: %s' %self.key_name
+      result = pdb.get(self.key_name,
+                            _storage=cache,
+                            _memcache_refresh = False,
+                            _local_cache_refresh = False,
+                            _local_expiration = _local_expiration,
+                            _memcache_expiration = _memcache_expiration,
+                            _key_check=False)
+      
+      if result is not None:
+        print 'Serving from cache'
+        return result
+      else:
+        print 'Fetching query'
+        result = self.query.fetch(limit,offset)
+        if LOCAL in cache:
+          print 'Saving into local %s' %self.key_name
+          cachepy.set(self.key_name,result,_local_expiration)
+        
+        if MEMCACHE in cache:
+          print 'Saving into memcache %s' %self.key_name
+          memcache.set(self.key_name,_serialize(result),_memcache_expiration)
+          
+        return self.query.fetch(limit,offset,**kwds)
+    
+      
+      
+    def repr_param(self,param):
+      if isinstance(param, db.Model):
+        return str(param.key())
+      else:
+        return str(param)
+        
 
 class _ReferenceCacheIndex(pdb.Model):
   '''This model is used for accessing the 'many' part of a 
@@ -637,54 +738,7 @@ class _ReferenceCacheIndex(pdb.Model):
                _memcache_expiration = _memcache_expiration)    
     return entity
 
-class _GqlCache(pdb.Model):
-  '''This class will be used for db.GqlQuery result caching,
-  not implemented yet'''
-    
-  def __init__(self,models,**kwds):
-    self.model_string = _serialize(models)
-    super(pdb.Model, self).__init__(**kwds)
-    
-  @classmethod
-  def build_key_name(cls,*args,**kwds):
-    arr = []
-    arr.extend(args)
-    arr = map(str,arr)
-    if len(kwds):
-      sorted_keys = sorted(kwds.keys())
-      for key in sorted_keys:
-        value = kwds[key]
-        if isinstance(value, db.Model):
-          value = value.key()
-        arr.append(key+cls._default_delimiter+str(value))
-  
-    print arr
-    print hash(''.join(arr))
-    
-  @property
-  def models(self):
-    return _deserialize(self.model_string)
 
-  model_string = db.BlobProperty()
-  add_time = db.DateTimeProperty(auto_now=True)
-
-class QueryRunner(object):
-  
-  def __init__(self,query,*args,**kwds):
-    self.query = query
-    self.query.bind(*args,**kwds)
-    self.key_name = _GqlCache.build_key_name(*args,**kwds)
-    
-  def fetch(self,limit,offset = 0,
-                  _storage = ALL_LEVELS,
-                  _result_type = LIST,
-                  _refresh_cache = ALL_LEVELS,
-                  _local_expiration=LOCAL_EXPIRATION,
-                  _memcache_expiration = MEMCACHE_EXPIRATION,
-                  _datastore_expiration = 0):
-    
-    
-    pass
 
 
 class ResultTypeError(Exception):
