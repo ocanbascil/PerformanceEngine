@@ -783,7 +783,31 @@ class pdb(object):
         return self.query.fetch(limit,offset,**kwds)
         
 class time_util(object):
-  '''This is a utility class for using update periods for cache invalidation'''
+  '''This is a utility class for using update periods for cache invalidation
+  
+    Example Usage:
+      Assume that we have 3 models (MinuteModel,HourModel,DayModel)
+      with update frequencies of 10 minutes, 1 hour and 1 day.
+      
+      We want to store and serve them using local cache, so we have to 
+      make sure that their local storage is invalidated after their update
+      frequency time is passed.
+      
+      minute_model = MinuteModel()
+      hour_model = HourModel()
+      day_model = DayModel()
+      
+      #Assume it is 15:23:10 at the time of following operations
+      
+      #Expiration time: 15:30:00 - 15:23:10 = 410 seconds
+      minute_model.put(_storage=['local','datastore'],_local_expiration = time_util.minute_expiration())
+      
+      #Expiration time: 16:00:00 - 15:23:10 = 2210 seconds
+      hour_model.put(_storage=['local','datastore'],_local_expiration = time_util.hour_expiration())
+      
+      #Expiration time: 00:00:00 - 15:23:10 = 31010 seconds
+      day_model.put(_storage=['local','datastore'],_local_expiration = time_util.day_expiration())
+  '''
   @classmethod
   def now(cls):
     return datetime.utcnow()
@@ -794,31 +818,37 @@ class time_util(object):
     return date(now.year,now.month,now.day)
   
   @classmethod
-  def minute_expiration(cls,mins=10,minute_offset=0):
+  def minute_expiration(cls,minutes=10,minute_offset=0):
+    '''Returns seconds left for the next minute period
+    Starting at minute_offset'''
     now = cls.now()
     second = now.second
     minute = now.minute
-    elapsed = (minute % mins)*60+second
-    return ((mins+minute_offset)*60)-elapsed
+    elapsed = (minute % minutes)*60+second
+    return (minutes+minute_offset)*60-elapsed
   
   @classmethod
   def hour_expiration(cls,hours=1,hour_offset=0,minute_offset=0):
+    '''Returns seconds left for the next hour period
+    Starting at hour_offset:minute_offset'''
     now = cls.now()
     second = now.second
     minute = now.minute
     hour = now.hour
     elapsed = (hour % hours)*3600+minute*60+second
-    return ((hours+hour_offset)*3600+minute_offset*60)-elapsed
+    return (hours+hour_offset)*3600+minute_offset*60-elapsed
     
   @classmethod
   def day_expiration(cls,days=1,day_offset=0,hour_offset=0,minute_offset=0):
+    '''Returns seconds left for the next day period
+    Starting at day_offset:hour_offset:minute_offset'''
     now = cls.now()
     second = now.second
     minute = now.minute
     hour = now.hour
     day = now.day
     elapsed = (day % days)*86400+hour*3600+minute*60+second
-    return ((days+day_offset)*86400+hour_offset*3600+minute_offset*60)-elapsed
+    return (days+day_offset)*86400+hour_offset*3600+minute_offset*60-elapsed
     
 class _ReferenceCacheIndex(pdb.Model):
   '''This model is used for accessing the 'many' part of a 
