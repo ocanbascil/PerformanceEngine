@@ -1,7 +1,7 @@
 # Copyright (C) 2011 O. Can Bascil <ocanbascil at gmail com>
 """
 PerformanceEngine
-v0.7
+v0.8
 https://github.com/ocanbascil/Performance-AppEngine
 ==============================
     PerformanceEngine is a simple wrapper module that enables layered 
@@ -29,6 +29,8 @@ from google.appengine.datastore import entity_pb
 
 import cachepy
 import logging
+
+from datetime import datetime,date
 
 '''Constants for storage levels'''
 DATASTORE = 'datastore'
@@ -542,6 +544,13 @@ class pdb(object):
       else:
         return entity
       
+    def cached_ref(self,reference_name,**kwds):
+      '''This function is a wrapper around db.ReferenceProperty
+      When a reference name is given this function tries to retrieve 
+      the model from given storage layers.
+      '''
+      pass
+      
     def cached_set(self,collection_name,index_expiration=300,**kwds):
       '''This function is a wrapper around back-reference functionality of 
       db.ReferenceProperty,allowing cached retrieval of models that reference 
@@ -567,7 +576,7 @@ class pdb(object):
         model.cached_set('ref_set') #Cached back-references
       
       Args:
-        collection_name: Name of the back reference property
+        collection_name: Name of the back reference collection
         index_expiration: Memcache expiration time for _ReferenceCacheIndex
         entity that'll be created for this reference set if there isn't any.
         
@@ -635,9 +644,15 @@ class pdb(object):
         When you do a fetch, indicate if you want cache support with
         this query by supplying cache and expiration parameters. 
         
+        Default usage with no additional parameters has the same 
+        functionality of a db.GqlQuery.
+        
         If no cache match is found and at least one cache layer is supplied,
         after the query is run on datastore the result will be stored in 
         cache for future calls.
+        
+        Do not use __limit or __fetch for names while binding 
+        parameters to a query.
         
       Example:
         query = pdb.GqlQuery('SELECT * FROM SomeModel WHERE count =:1',42)
@@ -646,7 +661,7 @@ class pdb(object):
         results = query.fetch(15,_cache=['memcache'],_memcache_expiration=120)
 
         #This time fetch results from memcache and also refresh the local cache 
-        #(Similar to cascaded cache refresh in pdb.get)
+        #Similar to cascaded cache refresh in pdb.get
         results = query.fetch(15,_cache=['local','memcache'],
                                       _memcache_expiration=120,
                                       _local_expiration=120)
@@ -678,10 +693,10 @@ class pdb(object):
           query = pdb.GqlQuery('SELECT * FROM SomeModel WHERE count =:count AND date=:date')
           query.bind(count=42,date=datetime.date.today())
           
-          #Fetch cache key: GQL_-1138707777|count:42|date:2011-04-05|__fetch:20
+          #Fetch cache key: GQL_-1138707777|count:42|date:2011-04-05|__limit:20
           result1 = query.fetch(20,cache=['memcache'])
           
-          #Fetch cache key: GQL_-1138707777|count:42|date:2011-04-05|__fetch:100
+          #Fetch cache key: GQL_-1138707777|count:42|date:2011-04-05|__limit:100
           result2= query.fetch(100,cache=['memcache'])
     '''
     delim  = '|'
@@ -692,12 +707,7 @@ class pdb(object):
       if args or kwds:
         self.bind(*args,**kwds)
       print self.key_name
-      
-    def bind(self,*args,**kwds):
-      self._clear_keyname()
-      self._create_suffix(*args,**kwds)
-      self.query.bind(*args,**kwds)
-      
+            
     def _concat_keyname(self,param):
       klass = self.__class__
       self.key_name += klass.delim+param
@@ -705,7 +715,6 @@ class pdb(object):
     def _clear_keyname(self,key=None):
       print 'Clear Start %s, %s' %(self.key_name,key)
       klass = self.__class__
-      
       if key is not None:
         key_index = self.key_name.find(key)
         if key_index > 0:
@@ -722,18 +731,22 @@ class pdb(object):
     def _create_suffix(self,*args,**kwds):
       for item in args:
         self._concat_keyname(self._repr_param(item))
-        
-      if len(kwds):
-        sorted_keys = sorted(kwds.keys())
-        for key in sorted_keys:
-          self._concat_keyname(key+':'+self._repr_param(kwds[key]))
+             
+      sorted_keys = sorted(kwds.keys())
+      for key in sorted_keys:
+        self._concat_keyname(key+':'+self._repr_param(kwds[key]))
     
     def _repr_param(self,param):
       if isinstance(param, db.Model):
         return str(param.key())
       else:
         return str(param)
-    
+
+    def bind(self,*args,**kwds):
+      self._clear_keyname()
+      self._create_suffix(*args,**kwds)
+      self.query.bind(*args,**kwds)
+      
     def fetch(self,limit,offset=0,
               _cache=[],
               _local_expiration = QUERY_EXPIRATION,
@@ -768,6 +781,44 @@ class pdb(object):
         if memcache_flag:
           memcache.set(self.key_name,_serialize(result),_memcache_expiration)
         return self.query.fetch(limit,offset,**kwds)
+        
+class time_util(object):
+  '''This is a utility class for using update periods for cache invalidation'''
+  @classmethod
+  def now(cls):
+    return datetime.utcnow()
+  
+  @classmethod
+  def today(cls):
+    now = cls.now()
+    return date(now.year,now.month,now.day)
+  
+  @classmethod
+  def minute_expiration(cls,mins=10,minute_offset=0):
+    now = cls.now()
+    second = now.second
+    minute = now.minute
+    elapsed = (minute % mins)*60+second
+    return ((mins+minute_offset)*60)-elapsed
+  
+  @classmethod
+  def hour_expiration(cls,hours=1,hour_offset=0,minute_offset=0):
+    now = cls.now()
+    second = now.second
+    minute = now.minute
+    hour = now.hour
+    elapsed = (hour % hours)*3600+minute*60+second
+    return ((hours+hour_offset)*3600+minute_offset*60)-elapsed
+    
+  @classmethod
+  def day_expiration(cls,days=1,day_offset=0,hour_offset=0,minute_offset=0):
+    now = cls.now()
+    second = now.second
+    minute = now.minute
+    hour = now.hour
+    day = now.day
+    elapsed = (day % days)*86400+hour*3600+minute*60+second
+    return ((days+day_offset)*86400+hour_offset*3600+minute_offset*60)-elapsed
     
 class _ReferenceCacheIndex(pdb.Model):
   '''This model is used for accessing the 'many' part of a 
