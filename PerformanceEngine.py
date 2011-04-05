@@ -714,14 +714,12 @@ class pdb(object):
       self.query = db.GqlQuery(query_string,*args,**kwds)
       if args or kwds:
         self.bind(*args,**kwds)
-      print self.key_name
             
     def _concat_keyname(self,param):
       klass = self.__class__
       self.key_name += klass.delim+param
       
     def _clear_keyname(self,key=None):
-      print 'Clear Start %s, %s' %(self.key_name,key)
       klass = self.__class__
       if key is not None:
         key_index = self.key_name.find(key)
@@ -734,7 +732,6 @@ class pdb(object):
 
       if delim_index > 0:
         self.key_name = self.key_name[:delim_index]
-      print 'Clear complete %s' %self.key_name
         
     def _create_suffix(self,*args,**kwds):
       for item in args:
@@ -772,7 +769,6 @@ class pdb(object):
       if offset != 0:
         self._concat_keyname('__offset:'+str(offset))
 
-      print 'Fetching with key: %s' %self.key_name
       result = pdb.get(self.key_name,
                             _storage=_cache,
                             _memcache_refresh = False,
