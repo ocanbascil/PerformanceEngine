@@ -35,13 +35,14 @@ DATASTORE = 'datastore'
 MEMCACHE = 'memcache'
 LOCAL = 'local'
 ALL_LEVELS = [DATASTORE,MEMCACHE,LOCAL]
+ALL_CACHE = [MEMCACHE,LOCAL]
 
 '''Constants for result types'''
 LIST = 'list'
 DICT = 'dict'
 NAME_DICT = 'name_dict'
 
-LOCAL_EXPIRATION = 0
+LOCAL_EXPIRATION = 300
 MEMCACHE_EXPIRATION = 0
 QUERY_EXPIRATION = 300
 
@@ -63,6 +64,11 @@ def _validate_storage(storage_list):
   for storage in storage_list:
     if storage not in ALL_LEVELS:
       raise StorageLayerError(storage)
+    
+def _validate_cache(cache_list):
+  for cache in cache_list:
+    if cache not in ALL_CACHE:
+      raise CacheLayerError(cache)
 
 def _key_str(param):
   '''Utility function that extracts a string key from a model or key instance'''
@@ -611,9 +617,10 @@ class pdb(object):
     def __init__(self,query_string,*args,**kwds):
       self.query_string = query_string
       self.key_name = str(hash(query_string))
-      self.query = db.GqlQuery(query_string)
+      self.query = db.GqlQuery(query_string,*args,**kwds)
       if args or kwds:
         self.bind(*args,**kwds)
+      print 'Init: %s' %self.key_name
       
     def bind(self,*args,**kwds):
       self._clear_keyname()
@@ -625,16 +632,22 @@ class pdb(object):
       self.key_name += klass.delim+param
       
     def _clear_keyname(self,key=None):
+      #print 'Clear Start %s, %s' %(self.key_name,key)
       klass = self.__class__
-      delim_index = self.key_name.find(klass.delim)
       
       if key is not None:
         key_index = self.key_name.find(key)
         if key_index > 0:
           delim_index = key_index-1
+        else:
+          delim_index = None
+      else:
+        delim_index = self.key_name.find(klass.delim)
 
       if delim_index > 0:
         self.key_name = self.key_name[:delim_index]
+      
+      #print 'Clear complete %s' %self.key_name
         
     def _create_suffix(self,*args,**kwds):
       for item in args:
@@ -651,8 +664,11 @@ class pdb(object):
               _memcache_expiration = QUERY_EXPIRATION,**kwds):
         
       print 'Fetch called'
-      if DATASTORE in cache:
-        print 'WTF'
+      cache = _to_list(cache)
+      _validate_cache(cache)
+      
+      local_flag = True if LOCAL in cache else False
+      memcache_flag = True if MEMCACHE in cache else False
         
       self._clear_keyname('__offset')
       self._clear_keyname('__limit')
@@ -665,9 +681,8 @@ class pdb(object):
       result = pdb.get(self.key_name,
                             _storage=cache,
                             _memcache_refresh = False,
-                            _local_cache_refresh = False,
+                            _local_cache_refresh = local_flag,
                             _local_expiration = _local_expiration,
-                            _memcache_expiration = _memcache_expiration,
                             _key_check=False)
       
       if result is not None:
@@ -676,11 +691,11 @@ class pdb(object):
       else:
         print 'Fetching query'
         result = self.query.fetch(limit,offset)
-        if LOCAL in cache:
+        if local_flag:
           print 'Saving into local %s' %self.key_name
           cachepy.set(self.key_name,result,_local_expiration)
         
-        if MEMCACHE in cache:
+        if memcache_flag:
           print 'Saving into memcache %s' %self.key_name
           memcache.set(self.key_name,_serialize(result),_memcache_expiration)
           
@@ -728,6 +743,12 @@ class ReferenceSetError(Exception):
     self.type = type
   def __str__(self):
     return  'Entity does not have a reference set called "%s"' %self.type 
+
+class CacheLayerError(Exception):
+  def __init__(self,cache):
+    self.cache = cache
+  def __str__(self):
+    return  'Cache layer name invalid: %s. Valid values are "local" and "memcache"' %self.cache
   
 class StorageLayerError(Exception):
   def __init__(self,storage):
