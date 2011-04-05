@@ -547,9 +547,17 @@ class pdb(object):
     def cached_ref(self,reference_name,**kwds):
       '''This function is a wrapper around db.ReferenceProperty
       When a reference name is given this function tries to retrieve 
-      the model from given storage layers.
+      the model from given storage layers using the pdb.get function.
       '''
-      pass
+      try:
+        property = self.properties()[reference_name]
+      except KeyError:
+        raise ReferenceError(reference_name, ReferenceError.REFERENCE_NAME_ERROR)
+      
+      if not isinstance(property, db.ReferenceProperty):
+        raise ReferenceError(property.__class__.__name__,ReferenceError.TYPE_ERROR)
+      
+      return pdb.get(property.get_value_for_datastore(self),**kwds)
       
     def cached_set(self,collection_name,index_expiration=300,**kwds):
       '''This function is a wrapper around back-reference functionality of 
@@ -590,7 +598,7 @@ class pdb(object):
       '''
       property = getattr(self, collection_name)
       if not isinstance(property, db.Query):
-        raise ReferenceSetError(collection_name)
+        raise ReferenceError(collection_name,ReferenceError.COLLECTION_NAME_ERROR)
       
       klass = self.__class__
       key_name = str(self.key())+klass._default_delimiter+collection_name
@@ -800,13 +808,16 @@ class time_util(object):
       #Assume it is 15:23:10 at the time of following operations
       
       #Expiration time: 15:30:00 - 15:23:10 = 410 seconds
-      minute_model.put(_storage=['local','datastore'],_local_expiration = time_util.minute_expiration())
+      minute_model.put(_storage=['local','datastore'],
+                              _local_expiration = time_util.minute_expiration(minutes=10))
       
       #Expiration time: 16:00:00 - 15:23:10 = 2210 seconds
-      hour_model.put(_storage=['local','datastore'],_local_expiration = time_util.hour_expiration())
+      hour_model.put(_storage=['local','datastore'],
+                            _local_expiration = time_util.hour_expiration(hours=1))
       
       #Expiration time: 00:00:00 - 15:23:10 = 31010 seconds
-      day_model.put(_storage=['local','datastore'],_local_expiration = time_util.day_expiration())
+      day_model.put(_storage=['local','datastore'],
+                          _local_expiration = time_util.day_expiration(days=1))
   '''
   @classmethod
   def now(cls):
@@ -878,12 +889,17 @@ class ResultTypeError(Exception):
   def __str__(self):
     return  'Result type is invalid: %s. Valid values are "list" and "dict" and "name_dict"' %self.type
   
-class ReferenceSetError(Exception):
-  def __init__(self,type):
-    self.type = type
+class ReferenceError(Exception):
+  COLLECTION_NAME_ERROR = 'Entity does not have a reference set called: '
+  REFERENCE_NAME_ERROR = 'Entity does not have a reference property called: '
+  TYPE_ERROR = 'Expected ReferenceProperty but received: '
+  
+  def __init__(self,param,message):
+    self.param = param
+    self.message = message
   def __str__(self):
-    return  'Entity does not have a reference set called "%s"' %self.type 
-
+    return  self.message+str(self.param)
+  
 class CacheLayerError(Exception):
   def __init__(self,cache):
     self.cache = cache
