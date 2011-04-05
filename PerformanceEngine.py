@@ -117,15 +117,7 @@ def _deserialize(data):
     return [db.model_from_protobuf(entity_pb.EntityProto(x)) for x in data]
 
 def _cachepy_get(keys):
-  '''Get items with given keys from local cache
-  
-  Args:
-    keys: String representation of db.Keys
-  
-  Returns:
-    Dictionary of key,model pairs in which keys are 
-    string representation of db.Key instances
-  '''
+  '''Get items with given keys from local cache'''
   result = {}
   for key in keys:
     result[key] = cachepy.get(key)
@@ -161,14 +153,6 @@ def _cachepy_delete(keys):
 
 def _memcache_get(keys):
   '''Get items with given keys from memcache
-  
-  Args:
-    keys: List of string representation of db.Keys
-  
-  Returns:
-    Dictionary of key,model pairs in which keys are 
-    string representation of db.Key instances
-    
     If no model is found for given key, value for that key
     in result is set to None
   '''
@@ -184,11 +168,7 @@ def _memcache_get(keys):
 def _memcache_put(models,time = 0):
   '''Put given models to memcache in serialized form
    with expiration in seconds
-  
-  Args:
-    models: List of models to be saved to local cache
-    time: Expiration time in seconds for each model instance
-  
+     
   Returns:
     List of string representations of db.Keys 
     of the models that were put
@@ -631,7 +611,6 @@ class pdb(object):
     def __init__(self,query_string,*args,**kwds):
       self.query_string = query_string
       self.key_name = str(hash(query_string))
-      print 'init %s' %self.key_name
       self.query = db.GqlQuery(query_string)
       if args or kwds:
         self.bind(*args,**kwds)
@@ -646,7 +625,6 @@ class pdb(object):
       self.key_name += klass.delim+param
       
     def _clear_keyname(self,key=None):
-      print 'Clear Start %s, %s' %(self.key_name,key)
       klass = self.__class__
       delim_index = self.key_name.find(klass.delim)
       
@@ -657,8 +635,6 @@ class pdb(object):
 
       if delim_index > 0:
         self.key_name = self.key_name[:delim_index]
-      
-      print 'Clear complete %s' %self.key_name
         
     def _create_suffix(self,*args,**kwds):
       for item in args:
