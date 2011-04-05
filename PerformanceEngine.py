@@ -602,6 +602,7 @@ class pdb(object):
     @classmethod
     def gql(cls, query_string, *args, **kwds):
       """Returns a cached query using GQL query string.
+      See pdb.GqlQuery for detail cache functionality usage.
 
       Args:
         query_string: properly formatted GQL query string with the
@@ -626,6 +627,63 @@ class pdb(object):
         logging.info(result)
         
   class GqlQuery(object):
+    '''This class is a wrapper that adds cache support to GQL queries
+      See Google App Engine docs for basic GqlQuery Usage
+      
+      Usage:
+        Create a pdb.GqlQuery instance and bind variables as you like.
+        When you do a fetch, indicate if you want cache support with
+        this query by supplying cache and expiration parameters. 
+        
+        If no cache match is found and at least one cache layer is supplied,
+        after the query is run on datastore the result will be stored in 
+        cache for future calls.
+        
+      Example:
+        query = pdb.GqlQuery('SELECT * FROM SomeModel WHERE count =:1',42)
+        
+        #Results are fetched from datastore and saved to memcache for 2 minutes
+        results = query.fetch(15,_cache=['memcache'],_memcache_expiration=120)
+
+        #This time fetch results from memcache and also refresh the local cache 
+        #(Similar to cascaded cache refresh in pdb.get)
+        results = query.fetch(15,_cache=['local','memcache'],
+                                      _memcache_expiration=120,
+                                      _local_expiration=120)
+                                      
+        WARNING: Creating cache keys for query results uses:
+        1 - hashed value of query string
+        2 - binded variables
+        3- fetch and offset parameters. 
+        
+        This results in logically equivalent queries with different syntaxes 
+        having different cache keys.
+        
+        Example 1: Equivalent queries with different query strings
+        
+          #Keyname root: GQL_-1132007280
+          query1 = pdb.GqlQuery('SELECT * FROM SomeModel WHERE count =:1',42)
+          
+          #Keyname root: GQL_-143876660
+          query2 = pdb.GqlQuery('SELECT * FROM SomeModel WHERE count =:count', count = 42)
+          
+          #Keyname root: GQL_-1145123476
+          query3 = pdb.GqlQuery('select * from SomeModel where count =:count', count = 42)
+          
+        Example 2: Equal number of results with different fetch limits
+          #Let's say we have only 10 occurences of a model in our database, for given parameters.
+          #Following queries both return same result but have different cache keys
+          
+          #Query cache key: GQL_-1138707777|count:42|date:2011-04-05
+          query = pdb.GqlQuery('SELECT * FROM SomeModel WHERE count =:count AND date=:date')
+          query.bind(count=42,date=datetime.date.today())
+          
+          #Fetch cache key: GQL_-1138707777|count:42|date:2011-04-05|__fetch:20
+          result1 = query.fetch(20,cache=['memcache'])
+          
+          #Fetch cache key: GQL_-1138707777|count:42|date:2011-04-05|__fetch:100
+          result2= query.fetch(100,cache=['memcache'])
+    '''
     delim  = '|'
     
     def __init__(self,query_string,*args,**kwds):
@@ -633,6 +691,7 @@ class pdb(object):
       self.query = db.GqlQuery(query_string,*args,**kwds)
       if args or kwds:
         self.bind(*args,**kwds)
+      print self.key_name
       
     def bind(self,*args,**kwds):
       self._clear_keyname()
@@ -676,15 +735,15 @@ class pdb(object):
         return str(param)
     
     def fetch(self,limit,offset=0,
-              cache=[MEMCACHE],
+              _cache=[],
               _local_expiration = QUERY_EXPIRATION,
               _memcache_expiration = QUERY_EXPIRATION,**kwds):
         
-      cache = _to_list(cache)
-      _validate_cache(cache)
+      _cache = _to_list(_cache)
+      _validate_cache(_cache)
       
-      local_flag = True if LOCAL in cache else False
-      memcache_flag = True if MEMCACHE in cache else False
+      local_flag = True if LOCAL in _cache else False
+      memcache_flag = True if MEMCACHE in _cache else False
         
       self._clear_keyname('__offset')
       self._clear_keyname('__limit')
@@ -694,7 +753,7 @@ class pdb(object):
 
       print 'Fetching with key: %s' %self.key_name
       result = pdb.get(self.key_name,
-                            _storage=cache,
+                            _storage=_cache,
                             _memcache_refresh = False,
                             _local_cache_refresh = local_flag,
                             _local_expiration = _local_expiration,
