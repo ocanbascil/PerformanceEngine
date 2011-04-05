@@ -597,7 +597,21 @@ class pdb(object):
       else: 
         result = [model for model in getattr(self,collection_name)]
         _ReferenceCacheIndex.create(self,collection_name,result,index_expiration)
-      return result    
+      return result
+    
+    @classmethod
+    def gql(cls, query_string, *args, **kwds):
+      """Returns a cached query using GQL query string.
+
+      Args:
+        query_string: properly formatted GQL query string with the
+          'SELECT * FROM <entity>' part omitted
+        *args: rest of the positional arguments used to bind numeric references
+          in the query.
+        **kwds: dictionary-based arguments (for named parameters).
+      """
+      return pdb.GqlQuery('SELECT * FROM %s %s' % (cls.kind(), query_string),
+                      *args, **kwds)       
     
     def log_properties(self,console=False):
       '''Log properties of an entity'''
@@ -611,16 +625,14 @@ class pdb(object):
       else:
         logging.info(result)
         
-  class BaseQuery(Model):
+  class GqlQuery(object):
     delim  = '|'
     
     def __init__(self,query_string,*args,**kwds):
-      self.query_string = query_string
-      self.key_name = str(hash(query_string))
+      self.key_name = 'GQL_'+str(hash(query_string))
       self.query = db.GqlQuery(query_string,*args,**kwds)
       if args or kwds:
         self.bind(*args,**kwds)
-      print 'Init: %s' %self.key_name
       
     def bind(self,*args,**kwds):
       self._clear_keyname()
@@ -632,7 +644,7 @@ class pdb(object):
       self.key_name += klass.delim+param
       
     def _clear_keyname(self,key=None):
-      #print 'Clear Start %s, %s' %(self.key_name,key)
+      print 'Clear Start %s, %s' %(self.key_name,key)
       klass = self.__class__
       
       if key is not None:
@@ -646,24 +658,28 @@ class pdb(object):
 
       if delim_index > 0:
         self.key_name = self.key_name[:delim_index]
-      
-      #print 'Clear complete %s' %self.key_name
+      print 'Clear complete %s' %self.key_name
         
     def _create_suffix(self,*args,**kwds):
       for item in args:
-        self._concat_keyname(self.repr_param(item))
+        self._concat_keyname(self._repr_param(item))
         
       if len(kwds):
         sorted_keys = sorted(kwds.keys())
         for key in sorted_keys:
-          self._concat_keyname(self.repr_param(kwds[key]))
+          self._concat_keyname(key+':'+self._repr_param(kwds[key]))
+    
+    def _repr_param(self,param):
+      if isinstance(param, db.Model):
+        return str(param.key())
+      else:
+        return str(param)
     
     def fetch(self,limit,offset=0,
               cache=[MEMCACHE],
               _local_expiration = QUERY_EXPIRATION,
               _memcache_expiration = QUERY_EXPIRATION,**kwds):
         
-      print 'Fetch called'
       cache = _to_list(cache)
       _validate_cache(cache)
       
@@ -672,7 +688,6 @@ class pdb(object):
         
       self._clear_keyname('__offset')
       self._clear_keyname('__limit')
-      
       self._concat_keyname('__limit:'+str(limit))
       if offset != 0:
         self._concat_keyname('__offset:'+str(offset))
@@ -686,30 +701,15 @@ class pdb(object):
                             _key_check=False)
       
       if result is not None:
-        print 'Serving from cache'
         return result
       else:
-        print 'Fetching query'
         result = self.query.fetch(limit,offset)
         if local_flag:
-          print 'Saving into local %s' %self.key_name
           cachepy.set(self.key_name,result,_local_expiration)
-        
         if memcache_flag:
-          print 'Saving into memcache %s' %self.key_name
           memcache.set(self.key_name,_serialize(result),_memcache_expiration)
-          
         return self.query.fetch(limit,offset,**kwds)
     
-      
-      
-    def repr_param(self,param):
-      if isinstance(param, db.Model):
-        return str(param.key())
-      else:
-        return str(param)
-        
-
 class _ReferenceCacheIndex(pdb.Model):
   '''This model is used for accessing the 'many' part of a 
   one-to-many relationship that uses db.ReferenceProperty
