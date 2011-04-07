@@ -1,4 +1,4 @@
-Performance Engine (v0.7)
+Performance Engine (v1.0)
 ====================
 
 What is it?
@@ -10,9 +10,11 @@ Features
 ---------
 * Layered data storage (local,memcache or datastore).
 * Models that live in cache only (local or memcache).
+* Cached queries!
 * Seamless integration into existing projects (call pdb.put instead of db.put).
-* Different result types (list, key-model dict,name-model dict)
-to increase developer performance.
+* Different result types (list, key-model dict,name-model dict) to increase developer performance.
+* Built-in handlers for common errors. (DeadlineExceededError,CapabilityDisabledError)
+* Unified and simple API (if you figure out how to use pdb.get and pdb.put, you're set for good)
 
 Requirements
 -------------
@@ -30,151 +32,49 @@ What is it not good for?
 * Applications that rely heavily on queries rather than get and put operations.
 
 Basic Usage
-=========
-
-If no additional parameters are given, PerformanceEngine works as memcache supported datastore.
-
-	from PerformanceEngine import pdb
-	
-	models  = [model1,model2..] #Group of db.Model entities 
-	#Models are both saved to memcache and datastore
-	pdb.put(models) 
-
-A get() function will try to get entities from memcache first, failing that, it tries to retrieve from datastore. It will then write entities that are fetched from datastore into memcache.
+------------
+If no additional parameters are given, PerformanceEngine works as memcache supported datastore. A get() function will try to get entities from memcache first, failing that, it tries to retrieve from datastore. It will then write entities that are fetched from datastore into memcache.
 
 	models = [model1,model2..]
 	keys = pdb.put()
-	#Key for an entity that's in datastore
+	#Key for an entity that's in datastore but not in memcache
 	keys.append(new_db_key) 
 	
-model1 & model2 is retrieved from memcache but model for new_db_key is retrieved from datastore. It is also saved into memcache for future calls.
+	#model1 & model2 is retrieved from memcache but model for
+	# new_db_key is retrieved from datastore. It is also saved 
+	#into memcache for future calls.
 	
 	pdb.get(keys)
 
-pdb.Model
-========
+Using different storage layers:
 
-A wrapper class around db.Model. Uses pdb methods instead
-of db.put(), db.get() and db.delete()
+	from PerformanceEngine import pdb
 	
-	class TestModel(pdb.Model):
-		date = db.DateProperty(auto_now=True)
-		value = db.IntegerProperty()
-		
-Write to both memcache and db
-
-	model = TestModel(count = 123)
-	key = model.put() 
+	model1 = SomeModel(key_name='model1')
+	model2 = SomeModel(key_name='model2')
+	model3 = SomeModel(key_name='model3')
 	
-Get from memcache	
-	TestModel.get(key) 
+	#Write to local cache
+	pdb.put(model1,_storage=['local'])
 	
-Key for a model that exists in db but not in memcache
-
-	other_key = db.Key.from_path('TestModel',42) 
+	#Write to both memcache and local cache
+	pdb.put(model2,_storage=['local','memcache']
 	
-Get the model from datastore and update memcache.
-Next call for same model will return value in the memcache
-
-	TestModel.get(other_key) 
+	#Write to all layers
+	pdb.put(model3,_storage=['local','memcache','datastore']
 	
-Utility methods
----------------
-* log_properties: Logs properties of a pdb.Model into console or application log
-* cached_set: Tries to get entities that back-reference this instance from cache
-	    
-	    class MainModel(pdb.Model):
-          add_date = db.DateProperty(auto_now = True) 
-        
-        class RefModel(db.Model):
-          ref = db.ReferenceProperty(reference_class=MainModel,
-                                              collection_name = 'ref_set')
-                                              
-        model = MainModel.all().get()
-        model.ref_set #models that reference this MainModel entity
-        model.cached_set('ref_set',_storage=['local','memcache']) #Cached back-references
+	#Read from local cache
+	model1 = SomeModel.get_by_key_name('model1',_storage=['local'])
 	
-Result Types
-==========
-
-You can set the result type parameter while doing a get() operation.
-Let's go with TestModel again.
-
-	model1 = TestModel(key_name='model1')
-	model2 = TestModel(key_name='model2')
-	model3 = TestModel() #No key name given, identifier will be integer id
+	#Read from memcache 
+	model2 = SomeModel.get_by_key_name('model2',_storage=['memcache'])
 	
-	keys = pdb.put([model1,model2,model3])
+	#Read from datastore (same as db.get)
+	model3 = SomeModel.get_by_key_name('model3',_storage=['datastore'])
 	
-Result as list
-
-	models = pdb.get(keys)
-	
-Result as key-model dict ({'agxtb2RlbHR...':TestModel,...})
-
-	model_dict = pdb.get(keys,_result_type='dict')
-	
-Result as key_name-model dict ({'model1':TestModel,'model2':TestModel,'1':TestModel})
-We didn't supply a key_name for 3rd model, so result dict has a str(id) as dict key
-
-	model_dict = pdb.get(keys,_result_type='name_dict')
-
 Advanced Usage
-=============
-
-Using Local Cache
-------------------
-Local cache is the memory of the virtual instances of App Engine. They are created and removed dynamically, so it is not advised to store frequently changing data on them.
-It is pretty useful for storing static content such as media or blobs.
-
-Storing an entity into local cache:
-
-	model = TestModel()
-	pdb.put(model,_storage='local')
-	
-To store an entity into memcache and local cache:
-
-	pdb.put(model,_storage=['local','memcache']
-	
-To store an entity in all storage layers:
-
-	pdb.put(model,_storage=['local','memcache','datastore'])
-	
-get() operations from given layers work in a similar way:
-
-	model = pdb.get(key,_storage='local') 
-	model = pdb.get(key,_storage='memcache')
-	model = pdb.get(key,_storage='datastore') #Same as db.get
-	
-Cache Expirations
------------------
-You can define cache expiration times (in seconds) for put operations, using the parameters _local_expiration and _memcache_expiration.
-
-	model = TestModel()
-	pdb.put(model,_storage=['local','memcache','datastore'],
-						_local_expiration=60,
-						_memcache_expiration=300)
-
-	
-Cascaded cache refresh
-------------------------
-By default, a pdb.get() operation will first try to get from memcache and then datastore. It also updates memcache if models for the given keys are found in datastore but not in memcache. You can also add local cache support to this operation.
-Let's say we have 3 keys, db_key,memcache_key and local_key that correspond to 3 different models of the same kind. Let's assume that model with db_key is stored in datastore, memcache_key store in memcache and so on...
-
-When we do a pdb.get along with the following parameters a cascaded cache update operation is started.
-
-	keys = [db_key,memcache_key,local_key]
-	pdb.get(keys,_storage=['local','memcache','datastore'],_local_cache_refresh=True,_memcache_refresh=True)
-	
-* For db_key, the model is retrieved from datastore and written into both memcache and local cache.
-* For memcache_key, the model is retrieved from memcache and written into local cache.
-* For local_key, the model is retrieved from local cache (if we're lucky) and is not updated elsewhere.
-
-* To sum up: During a get operation, any layer can update the layers above it but not the ones beneath it.
-
-To disable this update behavior use:
-	
-	pdb.get(keys,_memcache_refresh=False) #_local_cache_refresh is False by default
+----------------
+Please see [[PerformanceEngine Wiki]]
 	
 Examples
 ---------
@@ -186,8 +86,7 @@ Known Bugs
 	
 License
 -------
-This module is release under the BSD License. You can find the full text of
-the license in the LICENSE file.
+This module is release under the BSD License. You can find the full text of the license in the LICENSE file.
 
 Contact
 --------
