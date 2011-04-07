@@ -212,7 +212,8 @@ def _put(models,countdown=0):
     return keys
     
   except DeadlineExceededError:
-    deferred.defer(_put,models[last_index:],_countdown=countdown)
+    keys.extend(db.put(to_put))
+    deferred.defer(_put,models[last_index+1:],_countdown=10)
     return keys
   
   except CapabilityDisabledError:
@@ -276,10 +277,7 @@ class pdb(object):
     _storage = _to_list(_storage)
     _validate_storage(_storage)
     
-    if _key_check:
-      keys = map(_key_str, _to_list(keys))
-    else:
-      keys = _to_list(keys)
+    keys = _to_list(keys)
     old_keys = keys
     local_not_found = []
     memcache_not_found = []
