@@ -1,7 +1,7 @@
 # Copyright (C) 2011 O. Can Bascil <ocanbascil at gmail com>
 """
 PerformanceEngine
-v0.8
+v1.0
 https://github.com/ocanbascil/Performance-AppEngine
 ==============================
     PerformanceEngine is a simple wrapper module that enables layered 
@@ -25,7 +25,10 @@ the license in the LICENSE file.
 from google.appengine.api import memcache
 from google.appengine.ext import db
 from google.appengine.api import datastore
+from google.appengine.ext import deferred
 from google.appengine.datastore import entity_pb
+from google.appengine.runtime import DeadlineExceededError
+from google.appengine.runtime.apiproxy_errors import CapabilityDisabledError
 
 import cachepy
 import logging
@@ -152,7 +155,7 @@ def _cachepy_put(models,time = 0):
   
   for key, model in to_put.iteritems():
     cachepy.set(key,model,time)
-  return to_put.keys()
+  return [model.key() for model in models]
 
 def _cachepy_delete(keys):
   '''Delete models with given keys from local cache'''
@@ -187,11 +190,46 @@ def _memcache_put(models,time = 0):
       to_put[key] = _serialize(model)
           
   memcache.set_multi(to_put,time)
-  return to_put.keys()
+  return [model.key() for model in models]
 
 def _memcache_delete(keys):
   '''Delete models with given keys from memcache'''
   memcache.delete_multi(keys)
+  
+def _put(models,countdown=0):
+  batch_size = 4
+  to_put = []
+  keys = []
+  try:
+    if countdown:
+      model_dict = _to_dict(models)
+      cached_models = pdb.get(model_dict.keys(),
+                              _storage = [MEMCACHE],
+                              _result_type = DICT)
+      
+      models = dict(model_dict,**cached_models).values()
+  
+    for i,model in enumerate(models):
+      to_put.append(model)
+      if (i+1) % batch_size == 0:
+        keys.extend(db.put(to_put))
+        to_put = []
+    keys.extend(db.put(to_put))
+    print type(keys[0])
+    return keys
+    
+  except DeadlineExceededError:
+    countdown = 10
+    deferred.defer(_put,models,countdown,_countdown=countdown)
+    return keys
+  
+  except CapabilityDisabledError:
+    if not countdown:
+      countdown = 30
+    else:
+      countdown *= 2
+    deferred.defer(_put,models,countdown,_countdown=countdown)
+      
   
 class pdb(object):
   '''Wrapper class for google.appengine.ext.db with seamless cache support'''
@@ -349,7 +387,7 @@ class pdb(object):
       _to_dict(models)
     except db.NotSavedError:
       if DATASTORE in _storage:
-        keys = db.put(models)
+        keys = _put(models)
         models = db.get(keys)
         _storage.remove(DATASTORE)
         if len(_storage):
@@ -358,7 +396,7 @@ class pdb(object):
         raise IdentifierNotFoundError() 
     
     if DATASTORE in _storage:
-      keys = db.put(models)
+      keys = _put(models)
       
     if LOCAL in _storage:
       keys = _cachepy_put(models, _local_expiration)
@@ -875,9 +913,6 @@ class _ReferenceCacheIndex(pdb.Model):
     entity.put(_storage=MEMCACHE,
                _memcache_expiration = _memcache_expiration)    
     return entity
-
-
-
 
 class ResultTypeError(Exception):
   def __init__(self,type):
