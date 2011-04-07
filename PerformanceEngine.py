@@ -197,30 +197,22 @@ def _memcache_delete(keys):
   memcache.delete_multi(keys)
   
 def _put(models,countdown=0):
-  batch_size = 4
+  batch_size = 50
   to_put = []
   keys = []
   try:
-    if countdown:
-      model_dict = _to_dict(models)
-      cached_models = pdb.get(model_dict.keys(),
-                              _storage = [MEMCACHE],
-                              _result_type = DICT)
-      
-      models = dict(model_dict,**cached_models).values()
-  
+    last_index = 0
     for i,model in enumerate(models):
       to_put.append(model)
+      last_index = i
       if (i+1) % batch_size == 0:
         keys.extend(db.put(to_put))
         to_put = []
     keys.extend(db.put(to_put))
-    print type(keys[0])
     return keys
     
   except DeadlineExceededError:
-    countdown = 10
-    deferred.defer(_put,models,countdown,_countdown=countdown)
+    deferred.defer(_put,models[last_index:],_countdown=countdown)
     return keys
   
   except CapabilityDisabledError:
@@ -241,7 +233,6 @@ class pdb(object):
           _local_expiration = LOCAL_EXPIRATION,
           _memcache_expiration = MEMCACHE_EXPIRATION,
           _result_type=LIST,
-          _key_check=True,
           **kwds):
     """Fetch the specific Model instance with the given keys from 
     given storage layers in given format. 
@@ -259,8 +250,6 @@ class pdb(object):
       _memcache_expiration: Time for memcache expiration in seconds
                               Has no effect if _memcache_refresh = False
       _result_type: format of the result 
-      _key_check: Used for forcing custom keys to override default
-                        behaviour, You'll probably break things if you change this
       
       Inherited:
         keys: Key within datastore entity collection to find; or string key;
@@ -807,22 +796,17 @@ class pdb(object):
       if offset != 0:
         self._concat_keyname('__offset:'+str(offset))
 
-      result = pdb.get(self.key_name,
-                            _storage=_cache,
-                            _memcache_refresh = False,
-                            _local_cache_refresh = local_flag,
-                            _local_expiration = _local_expiration,
-                            _key_check=False)
+      result = _memcache_get(self.key_name)
       
-      if result is not None:
-        return result
-      else:
-        result = self.query.fetch(limit,offset)
-        if local_flag:
-          cachepy.set(self.key_name,result,_local_expiration)
+      if result is None:
+        result = self.query.fetch(limit,offset,**kwds)
         if memcache_flag:
           memcache.set(self.key_name,_serialize(result),_memcache_expiration)
-        return self.query.fetch(limit,offset,**kwds)
+      
+      if local_flag:
+        cachepy.set(self.key_name,result,_local_expiration)
+      
+      return result
         
 class time_util(object):
   '''This is a utility class for using update periods for cache invalidation
