@@ -74,7 +74,7 @@ Using different storage layers:
 	
 Advanced Usage
 ----------------
-Please see [[PerformanceEngine Wiki]]
+Please see [wiki](https://github.com/ocanbascil/Performance-AppEngine/wiki).
 	
 Examples
 ---------
