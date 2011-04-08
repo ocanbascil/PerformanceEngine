@@ -35,43 +35,46 @@ Basic Usage
 ------------
 If no additional parameters are given, PerformanceEngine works as memcache supported datastore. A get() function will try to get entities from memcache first, failing that, it tries to retrieve from datastore. It will then write entities that are fetched from datastore into memcache.
 
-	models = [model1,model2..]
-	keys = pdb.put()
-	#Key for an entity that's in datastore but not in memcache
-	keys.append(new_db_key) 
-	
-	#model1 & model2 is retrieved from memcache but model for
-	# new_db_key is retrieved from datastore. It is also saved 
-	#into memcache for future calls.
-	
-	pdb.get(keys)
+```python
+models = [model1,model2..]
+keys = pdb.put()
+#Key for an entity that's in datastore but not in memcache
+keys.append(new_db_key) 
+
+#model1 & model2 is retrieved from memcache but model for
+# new_db_key is retrieved from datastore. It is also saved 
+#into memcache for future calls.
+
+pdb.get(keys)
+```
 
 Using different storage layers:
 
-	from PerformanceEngine import pdb
-	
-	model1 = SomeModel(key_name='model1')
-	model2 = SomeModel(key_name='model2')
-	model3 = SomeModel(key_name='model3')
-	
-	#Write to local cache
-	pdb.put(model1,_storage=['local'])
-	
-	#Write to both memcache and local cache
-	pdb.put(model2,_storage=['local','memcache']
-	
-	#Write to all layers
-	pdb.put(model3,_storage=['local','memcache','datastore']
-	
-	#Read from local cache
-	model1 = SomeModel.get_by_key_name('model1',_storage=['local'])
-	
-	#Read from memcache 
-	model2 = SomeModel.get_by_key_name('model2',_storage=['memcache'])
-	
-	#Read from datastore (same as db.get)
-	model3 = SomeModel.get_by_key_name('model3',_storage=['datastore'])
-	
+```python
+from PerformanceEngine import pdb
+
+model1 = SomeModel(key_name='model1')
+model2 = SomeModel(key_name='model2')
+model3 = SomeModel(key_name='model3')
+
+#Write to local cache
+pdb.put(model1,_storage=['local'])
+
+#Write to both memcache and local cache
+pdb.put(model2,_storage=['local','memcache']
+
+#Write to all layers
+pdb.put(model3,_storage=['local','memcache','datastore']
+
+#Read from local cache
+model1 = SomeModel.get_by_key_name('model1',_storage=['local'])
+
+#Read from memcache 
+model2 = SomeModel.get_by_key_name('model2',_storage=['memcache'])
+
+#Read from datastore (same as db.get)
+model3 = SomeModel.get_by_key_name('model3',_storage=['datastore'])
+```	
 Advanced Usage
 ----------------
 Please see [wiki](https://github.com/ocanbascil/Performance-AppEngine/wiki).
