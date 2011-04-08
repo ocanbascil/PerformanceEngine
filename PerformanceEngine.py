@@ -143,11 +143,7 @@ def _cachepy_put(models,time = 0):
     time: Expiration time in seconds for each model instance
   
   Returns:
-    List of string representations of db.Keys 
-    of the models that were put
-    
-    If no model is found for given key, value for that key
-    in result is set to None
+    List of  of db.Keys of the models that were put
   '''
   to_put = _to_dict(models)
   if time == 0: #cachepy uses None as unlimited caching flag
@@ -181,8 +177,7 @@ def _memcache_put(models,time = 0):
    with expiration in seconds
      
   Returns:
-    List of string representations of db.Keys 
-    of the models that were put
+    List of  db.Keys of the models that were put
   '''         
   to_put = _to_dict(models)
         
