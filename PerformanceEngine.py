@@ -272,7 +272,7 @@ class pdb(object):
     _storage = _to_list(_storage)
     _validate_storage(_storage)
     
-    keys = _to_list(keys)
+    keys = map(_key_str,_to_list(keys))
     old_keys = keys
     local_not_found = []
     memcache_not_found = []
@@ -571,6 +571,7 @@ class pdb(object):
       '''
       try:
         property = self.properties()[reference_name]
+        print type(property)
       except KeyError:
         raise ReferenceError(reference_name, ReferenceError.REFERENCE_NAME_ERROR)
       
@@ -766,7 +767,7 @@ class pdb(object):
         return str(param.key())
       else:
         return str(param)
-
+      
     def bind(self,*args,**kwds):
       self._clear_keyname()
       self._create_suffix(*args,**kwds)
