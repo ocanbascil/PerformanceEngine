@@ -578,6 +578,10 @@ class pdb(object):
       if not isinstance(property, db.ReferenceProperty):
         raise ReferenceError(property.__class__.__name__,ReferenceError.TYPE_ERROR)
       
+      try:
+        kwds.pop('_result_type') #Use default result for pdb.get
+      except KeyError:
+        pass
       return pdb.get(property.get_value_for_datastore(self),**kwds)
       
     def cached_set(self,collection_name,index_expiration=300,**kwds):
