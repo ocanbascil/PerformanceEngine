@@ -621,7 +621,7 @@ class pdb(object):
         A list of models that back reference this entity
       
       Raises:
-        ReferenceSetError: If an invalid collection name is supplied
+        ReferenceError: If an invalid collection name is supplied
       '''
       property = getattr(self, collection_name)
       if not isinstance(property, db.Query):
@@ -745,13 +745,19 @@ class pdb(object):
         self.bind(*args,**kwds)
         
     def __iter__(self):
+      '''Iterator for query instance'''
       return self.query.run()
             
     def _concat_keyname(self,param):
+      '''Utility function for creating cache key
+      adds param to the self.key_name with default delimiter'''
       klass = self.__class__
       self.key_name += klass.delim+param
       
     def _clear_keyname(self,key=None):
+      '''Utility function for clearing cache key
+      if key is None, it removes all suffixes and leaves cache key root
+      otherwise it searches for given suffix and right trims the key at that point'''
       klass = self.__class__
       if key is not None:
         key_index = self.key_name.find(key)
@@ -766,6 +772,13 @@ class pdb(object):
         self.key_name = self.key_name[:delim_index]
         
     def _create_suffix(self,*args,**kwds):
+      '''When args and kwds are binded to the query,
+      this function creates a cache key using positional
+      and key-value parameters
+      
+      positional values are concatenated by order
+      key-value pairs are sorted by alphabetical order'''
+      
       for item in args:
         self._concat_keyname(self._repr_param(item))
              
@@ -774,33 +787,67 @@ class pdb(object):
         self._concat_keyname(key+':'+self._repr_param(kwds[key]))
     
     def _repr_param(self,param):
+      '''Converts query parameters to string representations'''
       if isinstance(param, db.Model):
         return str(param.key())
       else:
         return str(param)
       
     def bind(self,*args,**kwds):
+      '''Binds arguments to the query and creates cache key'''
       self._clear_keyname()
       self._create_suffix(*args,**kwds)
       self.query.bind(*args,**kwds)
       
     def cursor(self):
+      '''Returns the query cursor after a datastore query operation'''
       return self.query.cursor()
     
     def with_cursor(self,start_cursor, end_cursor=None):
+      '''Runs the query on datastore using start and end cursors'''
       return self.query.with_cursor(start_cursor, end_cursor)
       
     def count(self,limit=1000):
+      '''Return the number of entities for this query'''
       return self.query.count(limit)
       
     def get(self,**kwds):
+      '''Return first or offset+1 nth element in query result'''
       return self.fetch(1,**kwds)
       
     def fetch(self,limit,offset=0,
               _cache=[],
               _local_expiration = QUERY_EXPIRATION,
               _memcache_expiration = QUERY_EXPIRATION):
+      '''By default this method runs the query on datastore.
+      
+      If additonal parameters are supplied, it tries to retrieve query
+      results for current parameters and fetch & offset limits.
+      
+      It also does a cascaded cache refresh if no match for 
+      current arguments are found in given cache layers.
+      
+      Arguments:
         
+        limit: Number of model entities to be fetched
+        
+        offset: The number of results to skip.
+        
+        _cache: Cache layers to retrieve the results. If no match is found
+          the query is run on datastore and these layers are refreshed.
+          
+        _local_expiration: Expiration in seconds for local cache layer, if 
+          a cache refresh operation is run.
+          
+        _memcache_expiration: Expiration in seconds for memcache,
+          if a cache refresh operation is run.
+        
+      Returns:
+        The return value is a list of model instances, possibly an empty list.
+      
+      Raises:
+        CacheLayerError: If an invalid cache layer name is supplied
+      '''
       klass = self.__class__        
       _cache = _to_list(_cache)
       _validate_cache(_cache)
