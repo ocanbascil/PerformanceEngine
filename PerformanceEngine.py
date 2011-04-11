@@ -728,14 +728,13 @@ class pdb(object):
           query = pdb.GqlQuery('SELECT * FROM SomeModel WHERE count =:count AND date=:date')
           query.bind(count=42,date=datetime.date.today())
           
-          #Fetch cache key: GQL_-1138707777|count:42|date:2011-04-05|__limit:20
-          result1 = query.fetch(20,cache=['memcache'])
+          #Fetch cache key: GQL_-1138707777|count:42|date:2011-04-05|__limit__:20
+          result1 = query.fetch(20,_cache='memcache')
           
-          #Fetch cache key: GQL_-1138707777|count:42|date:2011-04-05|__limit:100
-          result2= query.fetch(100,cache=['memcache'])
+          #Fetch cache key: GQL_-1138707777|count:42|date:2011-04-05|__limit__:100
+          result2= query.fetch(100,_cache='memcache')
     '''
     delim  = '|'
-    cursor_key = '__cursor__'
     limit_key = '__limit__'
     offset_key = '__offset__'
     
@@ -744,6 +743,9 @@ class pdb(object):
       self.query = db.GqlQuery(query_string,*args,**kwds)
       if args or kwds:
         self.bind(*args,**kwds)
+        
+    def __iter__(self):
+      return self.query.run()
             
     def _concat_keyname(self,param):
       klass = self.__class__
@@ -802,6 +804,7 @@ class pdb(object):
       klass = self.__class__        
       _cache = _to_list(_cache)
       _validate_cache(_cache)
+      result = None
       
       local_flag = True if LOCAL in _cache else False
       memcache_flag = True if MEMCACHE in _cache else False
@@ -812,9 +815,12 @@ class pdb(object):
       if offset != 0:
         self._concat_keyname(klass.offset_key+str(offset))
 
-      result = _memcache_get(self.key_name)
+      if memcache_flag:
+        print 'keyname %s' %self.key_name
+        result = _deserialize(memcache.get(self.key_name))
       
       if result is None:
+        print 'FETCHING'
         result = self.query.fetch(limit,offset)
         if memcache_flag:
           memcache.set(self.key_name,_serialize(result),_memcache_expiration)

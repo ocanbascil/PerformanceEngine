@@ -4,7 +4,7 @@ Performance Engine (v1.0)
 What is it?
 -----------
 PerformanceEngine is a simple wrapper module that enables layered 
-data model storage on Google Application Engine. 
+data model and query result storage on Google Application Engine. 
 
 Features
 ---------
@@ -61,7 +61,7 @@ Using different storage layers:
 	pdb.put(model2,_storage=['local','memcache']
 	
 	#Write to all layers
-	pdb.put(model3,_storage=['local','memcache','datastore']
+	pdb.put(model3,_storage=['local','memcache','datastore'])
 	
 	#Read from local cache
 	model1 = SomeModel.get_by_key_name('model1',_storage='local')
