@@ -650,7 +650,7 @@ class pdb(object):
 
       Args:
         query_string: properly formatted GQL query string with the
-          'SELECT * FROM <entity>' part omitted
+          'SELECT * FROM <Model>' part omitted
         *args: rest of the positional arguments used to bind numeric references
           in the query.
         **kwds: dictionary-based arguments (for named parameters).
@@ -686,7 +686,7 @@ class pdb(object):
         after the query is run on datastore the result will be stored in 
         cache for future calls.
         
-        Do not use __limit or __fetch for names while binding 
+        Do not use __limit__ or __fetch__ for names while binding 
         parameters to a query.
         
       Example:
@@ -821,16 +821,13 @@ class pdb(object):
       if memcache_flag and result is None:
         result = _deserialize(memcache.get(self.key_name))
         if local_flag and result is not None:
-          print 'Saving memcache result into local'
           cachepy.set(self.key_name,result,_local_expiration)
       
       if result is None:
         result = self.query.fetch(limit,offset)
         if memcache_flag:
-          print 'Saving query result into memcache'
           memcache.set(self.key_name,_serialize(result),_memcache_expiration)
         if local_flag:
-          print 'Saving query result into local'
           cachepy.set(self.key_name,result,_local_expiration)
       
       return result
