@@ -55,7 +55,7 @@ Using different storage layers:
 	model3 = SomeModel(key_name='model3')
 	
 	#Write to local cache
-	pdb.put(model1,_storage=['local'])
+	pdb.put(model1,_storage='local')
 	
 	#Write to both memcache and local cache
 	pdb.put(model2,_storage=['local','memcache']
@@ -64,13 +64,13 @@ Using different storage layers:
 	pdb.put(model3,_storage=['local','memcache','datastore']
 	
 	#Read from local cache
-	model1 = SomeModel.get_by_key_name('model1',_storage=['local'])
+	model1 = SomeModel.get_by_key_name('model1',_storage='local')
 	
 	#Read from memcache 
-	model2 = SomeModel.get_by_key_name('model2',_storage=['memcache'])
+	model2 = SomeModel.get_by_key_name('model2',_storage='memcache')
 	
 	#Read from datastore (same as db.get)
-	model3 = SomeModel.get_by_key_name('model3',_storage=['datastore'])
+	model3 = SomeModel.get_by_key_name('model3',_storage='datastore')
 	
 Advanced Usage
 ----------------

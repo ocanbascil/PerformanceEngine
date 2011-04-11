@@ -557,8 +557,12 @@ class pdb(object):
         entity = cls(key_name=key_name, **kwds)
         entity.put(**kwds)
         return entity
-    
-      entity = cls.get_by_key_name(key_name,parent=kwds.get('parent'))
+        
+      try:
+        kwds.pop('_result_type') #Use default result for pdb.get
+      except KeyError:
+        pass
+      entity = cls.get_by_key_name(key_name,parent=kwds.get('parent'),**kwds)
       if entity is None:
         return db.run_in_transaction(txn)
       else:
@@ -571,13 +575,11 @@ class pdb(object):
       '''
       try:
         property = self.properties()[reference_name]
-        print type(property)
       except KeyError:
         raise ReferenceError(reference_name, ReferenceError.REFERENCE_NAME_ERROR)
-      
       if not isinstance(property, db.ReferenceProperty):
         raise ReferenceError(property.__class__.__name__,ReferenceError.TYPE_ERROR)
-      
+
       try:
         kwds.pop('_result_type') #Use default result for pdb.get
       except KeyError:
@@ -733,6 +735,9 @@ class pdb(object):
           result2= query.fetch(100,cache=['memcache'])
     '''
     delim  = '|'
+    cursor_key = '__cursor__'
+    limit_key = '__limit__'
+    offset_key = '__offset__'
     
     def __init__(self,query_string,*args,**kwds):
       self.key_name = 'GQL_'+str(hash(query_string))
@@ -777,27 +782,40 @@ class pdb(object):
       self._create_suffix(*args,**kwds)
       self.query.bind(*args,**kwds)
       
+    def cursor(self):
+      return self.query.cursor()
+    
+    def with_cursor(self,start_cursor, end_cursor=None):
+      return self.query.with_cursor(start_cursor, end_cursor)
+      
+    def count(self,limit=1000):
+      return self.query.count(limit)
+      
+    def get(self,**kwds):
+      return self.fetch(1,**kwds)
+      
     def fetch(self,limit,offset=0,
               _cache=[],
               _local_expiration = QUERY_EXPIRATION,
-              _memcache_expiration = QUERY_EXPIRATION,**kwds):
+              _memcache_expiration = QUERY_EXPIRATION):
         
+      klass = self.__class__        
       _cache = _to_list(_cache)
       _validate_cache(_cache)
       
       local_flag = True if LOCAL in _cache else False
       memcache_flag = True if MEMCACHE in _cache else False
         
-      self._clear_keyname('__offset')
-      self._clear_keyname('__limit')
-      self._concat_keyname('__limit:'+str(limit))
+      self._clear_keyname(klass.offset_key)
+      self._clear_keyname(klass.limit_key)
+      self._concat_keyname(klass.limit_key+str(limit))
       if offset != 0:
-        self._concat_keyname('__offset:'+str(offset))
+        self._concat_keyname(klass.offset_key+str(offset))
 
       result = _memcache_get(self.key_name)
       
       if result is None:
-        result = self.query.fetch(limit,offset,**kwds)
+        result = self.query.fetch(limit,offset)
         if memcache_flag:
           memcache.set(self.key_name,_serialize(result),_memcache_expiration)
       
