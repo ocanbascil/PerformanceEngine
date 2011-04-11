@@ -633,7 +633,7 @@ class pdb(object):
                                                          _storage=MEMCACHE)
       if query_cache:
         try:
-          kwds.pop('_result_type') #Use default result for pdb.get
+          kwds.pop('_result_type')  #Use default result for pdb.get
         except KeyError:
           pass
         keys = query_cache.ref_keys
