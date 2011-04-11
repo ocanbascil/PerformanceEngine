@@ -224,8 +224,6 @@ class pdb(object):
   
   @classmethod
   def get(cls,keys,_storage = [MEMCACHE,DATASTORE],
-          _memcache_refresh = True,
-          _local_cache_refresh = False,
           _local_expiration = LOCAL_EXPIRATION,
           _memcache_expiration = MEMCACHE_EXPIRATION,
           _result_type=LIST,
@@ -239,12 +237,10 @@ class pdb(object):
   
     Args:
       _storage: string or array of strings for target storage layers.
-      _local_cache_refresh: Flag for refreshing local instance cache
-      _memcache_refresh: Flag for refreshing memcache
       _local_expiration: Time for local cache expiration in seconds
-                              Has no effect if _local_cache_refresh = False
+                              'local' is not in _storage parameters.
       _memcache_expiration: Time for memcache expiration in seconds
-                              Has no effect if _memcache_refresh = False
+                              'memcache' is not in _storage parameters.
       _result_type: format of the result 
       
       Inherited:
@@ -276,14 +272,16 @@ class pdb(object):
     old_keys = keys
     local_not_found = []
     memcache_not_found = []
+    local_flag = True if LOCAL in _storage else False
+    memcache_flag = True if MEMCACHE in _storage else False
     models = {}
     
-    if LOCAL in _storage:
+    if local_flag:
       models = dict(models,**_cachepy_get(keys))
       keys = none_filter(models)
       local_not_found = keys
           
-    if MEMCACHE in _storage and len(keys):
+    if memcache_flag and len(keys):
       models = dict(models,**_memcache_get(keys))
       keys = none_filter(models)
       memcache_not_found = keys
@@ -293,13 +291,13 @@ class pdb(object):
       if len(db_results):
         models  = dict(models,**_to_dict(db_results))
         
-    if _local_cache_refresh:
+    if local_flag:
       targets = _dict_multi_get(local_not_found, models)
       if len(targets):
         pdb.put(targets,_storage = LOCAL,
                 _local_expiration = _local_expiration,**kwds)  
     
-    if _memcache_refresh:
+    if memcache_flag:
       targets = _dict_multi_get(memcache_not_found,models)
       if len(targets):  
         pdb.put(targets,_storage = MEMCACHE,
@@ -829,16 +827,12 @@ class pdb(object):
       
       Arguments:
         
-        limit: Number of model entities to be fetched
-        
+        limit: Number of model entities to be fetched      
         offset: The number of results to skip.
-        
         _cache: Cache layers to retrieve the results. If no match is found
-          the query is run on datastore and these layers are refreshed.
-          
+          the query is run on datastore and these layers are refreshed.         
         _local_expiration: Expiration in seconds for local cache layer, if 
-          a cache refresh operation is run.
-          
+          a cache refresh operation is run.         
         _memcache_expiration: Expiration in seconds for memcache,
           if a cache refresh operation is run.
         
