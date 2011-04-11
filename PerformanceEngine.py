@@ -815,18 +815,23 @@ class pdb(object):
       if offset != 0:
         self._concat_keyname(klass.offset_key+str(offset))
 
-      if memcache_flag:
-        print 'keyname %s' %self.key_name
+      if local_flag:
+        result = cachepy.get(self.key_name)
+
+      if memcache_flag and result is None:
         result = _deserialize(memcache.get(self.key_name))
+        if local_flag and result is not None:
+          print 'Saving memcache result into local'
+          cachepy.set(self.key_name,result,_local_expiration)
       
       if result is None:
-        print 'FETCHING'
         result = self.query.fetch(limit,offset)
         if memcache_flag:
+          print 'Saving query result into memcache'
           memcache.set(self.key_name,_serialize(result),_memcache_expiration)
-      
-      if local_flag:
-        cachepy.set(self.key_name,result,_local_expiration)
+        if local_flag:
+          print 'Saving query result into local'
+          cachepy.set(self.key_name,result,_local_expiration)
       
       return result
         
