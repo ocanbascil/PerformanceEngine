@@ -5,8 +5,8 @@ v1.0
 https://github.com/ocanbascil/Performance-AppEngine
 ==============================
     PerformanceEngine is a simple wrapper module that enables layered 
-    data model storage in Google Application Engine. Its main goal is to 
-    increase both application and developer performance.
+    data model storage and cached queries in Google Application Engine. 
+    Its main goal is to increase both application and developer performance.
     
     It can store/retrieve models using local cache, memcache or datastore.
     
@@ -85,11 +85,6 @@ def _key_str(param):
 def _id_or_name(_key_str):
   key = db.Key(_key_str)
   return key.name() or str(key.id())
-
-def _diff(list1,list2):
-  '''Finds the difference of keys between 2 lists
-  Used for layered model retrieval'''
-  return list(set(list1)-set(list2))
 
 def _to_list(param): 
     if not isinstance(param,list):
