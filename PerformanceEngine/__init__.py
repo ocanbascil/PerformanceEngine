@@ -379,7 +379,9 @@ class pdb(object):
     if MEMCACHE in _storage:
       keys = _memcache_put(models,_memcache_expiration)
       
-    return keys
+    if len(keys) > 1:
+      return keys
+    return keys[0]
 
 
   @classmethod
