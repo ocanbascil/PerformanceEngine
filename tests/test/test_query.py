@@ -27,10 +27,8 @@ class QueryTest(unittest.TestCase):
     pass
   
   def test_fetch(self):
-
     db_models = self.query.fetch(100,_cache=['local','memcache'])
     cache_key = self.query.key_name
-    logging.info('First %s' %cache_key)
     memcache_models = _deserialize(memcache.get(cache_key))
     local_models = cachepy.get(cache_key)
     
@@ -42,8 +40,6 @@ class QueryTest(unittest.TestCase):
     
     db_models = self.query.fetch(100,offset=50,_cache=['local','memcache'])
     cache_key = self.query.key_name
-    logging.info((self.query is None))
-    logging.info('Second %s' %cache_key)
     memcache_models = _deserialize(memcache.get(cache_key))
     local_models = cachepy.get(cache_key)
     
