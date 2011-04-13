@@ -1,0 +1,9 @@
+From [official documentation] (http://code.google.com/appengine/docs/python/tools/localunittesting.html):
+
+While running testrunner.py it, provide the path to your App Engine SDK installation and the path to your test modules.
+
+Example:     
+    
+    python testrunner.py 'C:\Program Files\Google\google_appengine' test
+
+The script runs the tests and prints results to the standard error stream.
