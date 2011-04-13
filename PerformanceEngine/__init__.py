@@ -527,7 +527,7 @@ class pdb(object):
       return pdb.get(key_strings,**kwds)
     
     @classmethod
-    def get_or_insert(cls,key_name,**kwds):
+    def get_or_insert(cls,key_name,parent=None,**kwds):
       '''Retrieve or create an instance of Model class using the given storage layers.
       
       If entity is found, it is returned and also cache layers are refreshed if the result
@@ -562,7 +562,7 @@ class pdb(object):
         kwds.pop('_result_type') #Use default result for pdb.get
       except KeyError:
         pass
-      entity = cls.get_by_key_name(key_name,parent=kwds.get('parent'),**kwds)
+      entity = cls.get_by_key_name(key_name,parent=parent,**kwds)
       if entity is None:
         return db.run_in_transaction(txn)
       else:

@@ -15,9 +15,11 @@ class ModelTest(unittest.TestCase):
     self.testbed.init_memcache_stub()
     self.setup_name = 'test'
     self.setup_name_int = 'int_model'
-    model = PdbModel(key_name='test_model',name=self.setup_name)
-    int_model = PdbModel(name=self.setup_name_int)
+    parent_model = PdbModel(key_name='parent_model')
+    model = PdbModel(key_name='test_model',parent=parent_model,name=self.setup_name)
+    int_model = PdbModel(name=self.setup_name_int,parent=parent_model)
     self.setup_key = pdb.put(model,_storage=['local','memcache','datastore'])
+    self.parent_key = pdb.put(parent_model,_storage=['local','memcache','datastore'])
     self.setup_key_int = pdb.put(int_model,_storage=['local','memcache','datastore'])
     
   def test_get(self):  
@@ -59,10 +61,13 @@ class ModelTest(unittest.TestCase):
   
   def test_get_by_key_name(self):
     local_entity = PdbModel.get_by_key_name(self.setup_key.name(),
+                                            parent = self.parent_key,
                                             _storage='local')
     memcache_entity = PdbModel.get_by_key_name(self.setup_key.name(),
+                                               parent = self.parent_key,
                                                _storage='memcache')
     db_entity = PdbModel.get_by_key_name(self.setup_key.name(),
+                                         parent = self.parent_key,
                                          _storage='datastore')
 
     self.assertEqual(local_entity.name,self.setup_name)
@@ -70,9 +75,15 @@ class ModelTest(unittest.TestCase):
     self.assertEqual(db_entity.name,self.setup_name)
     
   def test_get_by_id(self):
-    local_entity = PdbModel.get_by_id(self.setup_key_int.id(),_storage='local')
-    memcache_entity = PdbModel.get_by_id(self.setup_key_int.id(),_storage='memcache')
-    db_entity = PdbModel.get_by_id(self.setup_key_int.id(),_storage='datastore')
+    local_entity = PdbModel.get_by_id(self.setup_key_int.id(),
+                                      parent = self.parent_key,
+                                      _storage='local')
+    memcache_entity = PdbModel.get_by_id(self.setup_key_int.id(),
+                                         parent = self.parent_key,
+                                         _storage='memcache')
+    db_entity = PdbModel.get_by_id(self.setup_key_int.id(),
+                                   parent = self.parent_key,
+                                   _storage='datastore')
 
     self.assertEqual(local_entity.name,self.setup_name_int)
     self.assertEqual(memcache_entity.name,self.setup_name_int)
@@ -81,12 +92,15 @@ class ModelTest(unittest.TestCase):
   def test_get_or_insert(self):
     #Existing entity
     local_entity = PdbModel.get_or_insert(self.setup_key.name(),
+                                          parent = self.parent_key,
                                           name='Different name'
                                           ,_storage='local')
     memcache_entity = PdbModel.get_or_insert(self.setup_key.name(),
+                                             parent = self.parent_key,
                                              name='Different name',
                                              _storage='memcache')
     db_entity = PdbModel.get_or_insert(self.setup_key.name(),
+                                       parent = self.parent_key,
                                        name='Different name',
                                        _storage='datastore')
 
