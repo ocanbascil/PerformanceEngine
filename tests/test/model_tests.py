@@ -22,19 +22,38 @@ class ModelTest(unittest.TestCase):
     
   def test_get(self):  
     local_entity = PdbModel.get(self.setup_key,_storage='local')
-    #memcache_entity = TestModel.get(self.setup_key,_storage='memcache')
+    memcache_entity = PdbModel.get(self.setup_key,_storage='memcache')
     db_entity = PdbModel.get(self.setup_key,_storage='datastore')
     
     self.assertEqual(local_entity.name,self.setup_name)
-    #self.assertEqual(memcache_entity.name,self.setup_name)
+    self.assertEqual(memcache_entity.name,self.setup_name)
     self.assertEqual(db_entity.name,self.setup_name)
   
   
   def test_put(self):
-    pass
+    model = PdbModel(name='put_test')
+    key = model.put(_storage=['local','memcache','datastore'])
+    
+    local_entity = PdbModel.get(key,_storage='local')
+    memcache_entity = PdbModel.get(key,_storage='memcache')
+    db_entity = PdbModel.get(key,_storage='datastore')
+    
+    self.assertEqual(local_entity.name,'put_test')
+    self.assertEqual(memcache_entity.name,'put_test')
+    self.assertEqual(db_entity.name,'put_test')                
+                 
   
   def test_delete(self):
-    pass
+    model = PdbModel.get(self.setup_key,_storage=['local','memcache','datastore'])
+    model.delete(_storage=['local','memcache','datastore'])
+    
+    local_entity = PdbModel.get(self.setup_key,_storage='local')
+    memcache_entity = PdbModel.get(self.setup_key,_storage='memcache')
+    db_entity = PdbModel.get(self.setup_key,_storage='datastore')
+    
+    self.assertEqual(local_entity , None)
+    self.assertEqual(memcache_entity , None)
+    self.assertEqual(db_entity , None)
   
   def test_gql(self):
     pass

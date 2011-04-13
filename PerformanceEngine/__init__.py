@@ -455,7 +455,7 @@ class pdb(object):
         See pdb.get
         
       Raises:
-        KindError if any of the retreived objects are not instances of the
+        KindError if any of the retrieved objects are not instances of the
           type associated with call to 'get'.
       '''
       models = pdb.get(keys,**kwds)
@@ -466,8 +466,12 @@ class pdb(object):
         temp = dict.values()
       elif isinstance(temp, db.Model):
         temp = [temp]
+        
+      if temp is None:
+        return None
+    
       for instance in temp:
-        if not(instance is None or isinstance(instance, cls)):
+        if not isinstance(instance, cls):
           raise db.KindError('Kind %r is not a subclass of kind %r' %
                           (instance, cls)) 
       return models
