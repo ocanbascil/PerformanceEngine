@@ -111,7 +111,31 @@ class ModelTest(unittest.TestCase):
     self.assertEqual(db_entity.name,'Different name')
   
   def test_cached_ref(self):
-    pass
+    class RefModel(pdb.Model):
+      reference = db.ReferenceProperty(PdbModel)
+      
+    ref_model = RefModel(reference=self.setup_key)
+    ref_model.put()
+    
+    local_entity = ref_model.cached_ref('reference',_storage='local')
+    memcache_entity = ref_model.cached_ref('reference',_storage='memcache')
+    db_entity = ref_model.cached_ref('reference',_storage='datastore')
+
+    self.assertEqual(local_entity.name,self.setup_name)
+    self.assertEqual(memcache_entity.name,self.setup_name)
+    self.assertEqual(db_entity.name,self.setup_name)
   
   def test_cached_set(self):
-    pass
+    class RefModel(pdb.Model):
+      reference = db.ReferenceProperty(PdbModel)
+      
+    models = []
+    for i in range(100):
+      models.append(RefModel(reference=self.setup_key))
+      
+    pdb.put(models)
+    pdb_model = pdb.get(self.setup_key)
+    
+    #First call creates memcache index
+    refs = pdb_model.cached_set('refmodel_set')
+    self.assertEqual(len(refs),len(models))
