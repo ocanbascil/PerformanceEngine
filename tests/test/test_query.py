@@ -36,7 +36,9 @@ class QueryTest(unittest.TestCase):
     
     self.assertEqual(len(db_models),100)
     self.assertEqual(len(memcache_models),100)
-    self.assertEqual(len(local_models),100)    
+    self.assertEqual(len(local_models),100)
+    self.assertEqual(db_models[0].key(),memcache_models[0].key())
+    self.assertEqual(db_models[0].key(),local_models[0].key())      
     
     db_models = self.query.fetch(100,offset=50,_cache=['local','memcache'])
     cache_key = self.query.key_name
@@ -48,7 +50,8 @@ class QueryTest(unittest.TestCase):
     self.assertEqual(len(db_models),50)
     self.assertEqual(len(memcache_models),50)
     self.assertEqual(len(local_models),50)
-      
+    self.assertEqual(db_models[0].key(),memcache_models[0].key())
+    self.assertEqual(db_models[0].key(),local_models[0].key())  
   
   def test_get(self):
     pass
