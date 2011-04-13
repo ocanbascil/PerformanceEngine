@@ -21,9 +21,6 @@ class GetTest(unittest.TestCase):
     cachepy.set(cache_key, model)
     memcache.set(cache_key, _serialize(model))
   
-  def tearDown(self):
-    self.testbed.deactivate()
-      
   def test_get_db(self):
     entity = pdb.get(self.setup_key,_storage='datastore')
     self.assertEqual('test', entity.name)
@@ -89,9 +86,6 @@ class PutTest(unittest.TestCase):
     self.setup_key = pdb.put(model,_storage=['local','memcache','datastore'] )
     self.cache_key = str(self.setup_key)
  
-  def tearDown(self):
-    self.testbed.deactivate()
-         
   def test_put_db(self):
     model = TestModel(key_name='test_key_name',name='test')
     key = pdb.put(model,_storage='datastore')
@@ -120,9 +114,6 @@ class DeleteTest(unittest.TestCase):
     self.setup_key = pdb.put(model,_storage=['local','memcache','datastore'] )
     self.cache_key = str(self.setup_key)
 
-  def tearDown(self):
-    self.testbed.deactivate()
-    
   def test_delete_db(self):
     pdb.delete(self.setup_key,_storage='datastore')
     entity = db.get(self.setup_key)
