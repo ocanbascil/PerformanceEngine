@@ -6,11 +6,14 @@ What is it?
 PerformanceEngine is a simple wrapper module that enables layered 
 data model and query result storage on Google Application Engine. 
 
+More features coming soon!
+
 Features
 ---------
 * Layered data storage (local,memcache or datastore).
 * Models that live in cache only (local or memcache).
 * Cached queries!
+* Lighweight (1 package, 2 files)
 * Seamless integration into existing projects (call pdb.put instead of db.put).
 * Different result types (list, key-model dict,name-model dict) to increase developer performance.
 * Built-in handlers for common errors. (DeadlineExceededError,CapabilityDisabledError)
@@ -86,7 +89,7 @@ Known Bugs
 	
 License
 -------
-This module is release under the BSD License. You can find the full text of the license in the LICENSE file.
+This module is released under the BSD License. You can find the full text of the license in the LICENSE file.
 
 Contact
 --------
