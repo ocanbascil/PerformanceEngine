@@ -29,7 +29,6 @@ class ModelTest(unittest.TestCase):
     self.assertEqual(memcache_entity.name,self.setup_name)
     self.assertEqual(db_entity.name,self.setup_name)
   
-  
   def test_put(self):
     model = PdbModel(name='put_test')
     key = model.put(_storage=['local','memcache','datastore'])
@@ -42,7 +41,6 @@ class ModelTest(unittest.TestCase):
     self.assertEqual(memcache_entity.name,'put_test')
     self.assertEqual(db_entity.name,'put_test')                
                  
-  
   def test_delete(self):
     model = PdbModel.get(self.setup_key,_storage=['local','memcache','datastore'])
     model.delete(_storage=['local','memcache','datastore'])
@@ -56,16 +54,61 @@ class ModelTest(unittest.TestCase):
     self.assertEqual(db_entity , None)
   
   def test_gql(self):
+    #Add this after doing GqlQuery tests
     pass
   
   def test_get_by_key_name(self):
-    pass
-  
+    local_entity = PdbModel.get_by_key_name(self.setup_key.name(),
+                                            _storage='local')
+    memcache_entity = PdbModel.get_by_key_name(self.setup_key.name(),
+                                               _storage='memcache')
+    db_entity = PdbModel.get_by_key_name(self.setup_key.name(),
+                                         _storage='datastore')
+
+    self.assertEqual(local_entity.name,self.setup_name)
+    self.assertEqual(memcache_entity.name,self.setup_name)
+    self.assertEqual(db_entity.name,self.setup_name)
+    
   def test_get_by_id(self):
-    pass
+    local_entity = PdbModel.get_by_id(self.setup_key_int.id(),_storage='local')
+    memcache_entity = PdbModel.get_by_id(self.setup_key_int.id(),_storage='memcache')
+    db_entity = PdbModel.get_by_id(self.setup_key_int.id(),_storage='datastore')
+
+    self.assertEqual(local_entity.name,self.setup_name_int)
+    self.assertEqual(memcache_entity.name,self.setup_name_int)
+    self.assertEqual(db_entity.name,self.setup_name_int)
   
   def test_get_or_insert(self):
-    pass
+    #Existing entity
+    local_entity = PdbModel.get_or_insert(self.setup_key.name(),
+                                          name='Different name'
+                                          ,_storage='local')
+    memcache_entity = PdbModel.get_or_insert(self.setup_key.name(),
+                                             name='Different name',
+                                             _storage='memcache')
+    db_entity = PdbModel.get_or_insert(self.setup_key.name(),
+                                       name='Different name',
+                                       _storage='datastore')
+
+    self.assertEqual(local_entity.name,self.setup_name)
+    self.assertEqual(memcache_entity.name,self.setup_name)
+    self.assertEqual(db_entity.name,self.setup_name)
+    
+    #New entity
+    key_name = 'new_entity'
+    local_entity = PdbModel.get_or_insert(key_name,
+                                          name='Different name'
+                                          ,_storage='local')
+    memcache_entity = PdbModel.get_or_insert(key_name,
+                                             name='Different name',
+                                             _storage='memcache')
+    db_entity = PdbModel.get_or_insert(key_name,
+                                       name='Different name',
+                                       _storage='datastore')
+
+    self.assertEqual(local_entity.name,'Different name')
+    self.assertEqual(memcache_entity.name,'Different name')
+    self.assertEqual(db_entity.name,'Different name')
   
   def test_cached_ref(self):
     pass
