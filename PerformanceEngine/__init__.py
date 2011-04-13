@@ -469,7 +469,7 @@ class pdb(object):
       for instance in temp:
         if not(instance is None or isinstance(instance, cls)):
           raise db.KindError('Kind %r is not a subclass of kind %r' %
-                          (instance.kind(), cls.kind())) 
+                          (instance, cls)) 
       return models
     
     def delete(self,_storage = ALL_LEVELS):

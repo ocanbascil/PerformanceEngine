@@ -4,9 +4,8 @@ from google.appengine.ext import db
 from google.appengine.api import memcache
 from google.appengine.ext import testbed
 from PerformanceEngine import pdb,_serialize,_deserialize,cachepy
+from models import TestModel
 
-class TestModel(db.Model):
-  name = db.StringProperty()
 
 class GetTest(unittest.TestCase):
 
