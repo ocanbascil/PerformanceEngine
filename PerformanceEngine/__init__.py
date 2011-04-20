@@ -920,20 +920,30 @@ class time_util(object):
     return date(now.year,now.month,now.day)
   
   @classmethod
-  def minute_expiration(cls,minutes=10,minute_offset=0):
+  def minute_expiration(cls,minutes=10,
+                                        minute_offset=0,
+                                        _test_datetime=None):
     '''Returns seconds left for the next minute period
     Starting at minute_offset'''
-    now = cls.now()
+    if _test_datetime:
+      now = _test_datetime
+    else:
+      now = cls.now()
     second = now.second
     minute = now.minute
     elapsed = (minute % minutes)*60+second
     return (minutes+minute_offset)*60-elapsed
   
   @classmethod
-  def hour_expiration(cls,hours=1,hour_offset=0,minute_offset=0):
+  def hour_expiration(cls,hours=1,hour_offset=0,
+                                    minute_offset=0,
+                                    _test_datetime=None):
     '''Returns seconds left for the next hour period
     Starting at hour_offset:minute_offset'''
-    now = cls.now()
+    if _test_datetime:
+      now = _test_datetime
+    else:
+      now = cls.now()
     second = now.second
     minute = now.minute
     hour = now.hour
@@ -941,10 +951,16 @@ class time_util(object):
     return (hours+hour_offset)*3600+minute_offset*60-elapsed
     
   @classmethod
-  def day_expiration(cls,days=1,day_offset=0,hour_offset=0,minute_offset=0):
+  def day_expiration(cls,days=1,day_offset=0,
+                                   hour_offset=0,
+                                   minute_offset=0,
+                                   _test_datetime=None):
     '''Returns seconds left for the next day period
     Starting at day_offset:hour_offset:minute_offset'''
-    now = cls.now()
+    if _test_datetime:
+      now = _test_datetime
+    else:
+      now = cls.now()
     second = now.second
     minute = now.minute
     hour = now.hour
