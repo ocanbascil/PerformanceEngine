@@ -382,7 +382,10 @@ class pdb(object):
       
     if len(keys) > 1:
       return keys
-    return keys[0]
+    elif len(keys):
+      return keys[0]
+    else:
+      return None
 
 
   @classmethod
@@ -813,7 +816,7 @@ class pdb(object):
       
     def get(self,**kwds):
       '''Return first or offset+1 nth element in query result'''
-      return self.fetch(1,**kwds)
+      return self.fetch(1,**kwds)[0]
       
     def fetch(self,limit,offset=0,
               _cache=[],

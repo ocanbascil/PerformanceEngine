@@ -24,7 +24,11 @@ class QueryTest(unittest.TestCase):
     self.testbed.deactivate() 
       
   def test_bind(self):
-    pass
+    positional_query = pdb.GqlQuery('SELECT * FROM PdbModel WHERE count >:1 AND name=:2')
+    keyword_query = pdb.GqlQuery('SELECT * FROM PdbModel WHERE count > :count AND name=:name')
+    
+    positional_query.bind(5,'test_name')
+    keyword_query.bind(count=5,name='test_name')
   
   def test_fetch(self):
     db_models = self.query.fetch(100,_cache=['local','memcache'])
@@ -50,7 +54,23 @@ class QueryTest(unittest.TestCase):
     self.assertEqual(db_models[0].key(),local_models[0].key())  
   
   def test_get(self):
-    pass
+    db_entity = self.query.get(_cache=['local','memcache'])
+    cache_key = self.query.key_name
+    memcache_entity = _deserialize(memcache.get(cache_key))[0]
+    local_entity = cachepy.get(cache_key)[0]
+ 
+    self.assertEqual(db_entity.count,0)
+    self.assertEqual(db_entity.key(),memcache_entity.key())
+    self.assertEqual(memcache_entity.key(),local_entity.key())      
+    
+    db_entity = self.query.get(offset=50,_cache=['local','memcache'])
+    cache_key = self.query.key_name
+    memcache_entity = _deserialize(memcache.get(cache_key))[0]
+    local_entity = cachepy.get(cache_key)[0]
+    
+    self.assertEqual(db_entity.count,50)
+    self.assertEqual(db_entity.key(),memcache_entity.key())
+    self.assertEqual(memcache_entity.key(),local_entity.key())    
   
   def test_count(self):
     pass
