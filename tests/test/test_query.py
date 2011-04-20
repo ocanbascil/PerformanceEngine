@@ -73,10 +73,34 @@ class QueryTest(unittest.TestCase):
     self.assertEqual(memcache_entity.key(),local_entity.key())    
   
   def test_count(self):
-    pass
+    self.assertEqual(self.query.count(),100)
   
   def test_cursor(self):
-    pass
+    results = self.query.fetch(10)
+    cursor = self.query.cursor()
+    self.assertTrue(isinstance(cursor, str))
   
   def test_with_cursor(self):
-    pass
+    results = self.query.fetch(10)
+    cursor = self.query.cursor()
+    
+    self.assertEqual(results[0].count,0)
+    
+    self.query.with_cursor(cursor)
+    results = self.query.fetch(10)
+    end_cursor = self.query.cursor()
+    
+    self.assertEqual(results[0].count,10)
+    
+    self.query.with_cursor(cursor, end_cursor)
+    results = self.query.fetch(1000)
+    
+    self.assertEqual(len(results),10)
+    self.assertEqual(results[0].count,10)
+    self.assertEqual(results[9].count,19)
+    
+    self.query.with_cursor(None)
+    results = self.query.fetch(10)
+    self.assertEqual(len(results),10)
+    self.assertEqual(results[0].count,0)
+    

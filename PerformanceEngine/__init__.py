@@ -816,7 +816,10 @@ class pdb(object):
       
     def get(self,**kwds):
       '''Return first or offset+1 nth element in query result'''
-      return self.fetch(1,**kwds)[0]
+      try:
+        return self.fetch(1,**kwds)[0]
+      except IndexError:
+        return None
       
     def fetch(self,limit,offset=0,
               _cache=[],
