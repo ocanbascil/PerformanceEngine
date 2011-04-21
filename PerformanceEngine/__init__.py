@@ -930,7 +930,10 @@ class time_util(object):
       now = cls.now()
     second = now.second
     minute = now.minute
-    elapsed = (minute % minutes)*60+second
+    if minute < minutes + minute_offset:
+      elapsed = minute*60
+    else:
+      elapsed = (minute % minutes)*60+second
     return (minutes+minute_offset)*60-elapsed
   
   @classmethod
