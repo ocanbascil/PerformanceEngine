@@ -27,8 +27,7 @@ from google.appengine.ext import db
 from google.appengine.api import datastore
 from google.appengine.ext import deferred
 from google.appengine.datastore import entity_pb
-from google.appengine.runtime import DeadlineExceededError
-from google.appengine.runtime.apiproxy_errors import CapabilityDisabledError
+from google.appengine.runtime import apiproxy_errors
 
 import cachepy
 import logging
@@ -201,12 +200,12 @@ def _put(models,countdown=0):
     keys.extend(db.put(to_put))
     return keys
     
-  except DeadlineExceededError:
+  except apiproxy_errors.DeadlineExceededError:
     keys.extend(db.put(to_put))
     deferred.defer(_put,models[last_index+1:],_countdown=10)
     return keys
   
-  except CapabilityDisabledError:
+  except apiproxy_errors.CapabilityDisabledError:
     if not countdown:
       countdown = 30
     else:
