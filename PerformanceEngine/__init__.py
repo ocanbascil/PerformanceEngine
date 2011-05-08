@@ -52,18 +52,8 @@ QUERY_EXPIRATION = 300
 
 none_filter  = lambda dict : [k for k,v in dict.iteritems() if v is None]
 
-def _dict_multi_get(keys,dict):
-  '''Used for cascaded cache refresh operation'''
-  result = []
-  for key in keys:
-    try:
-      value = dict[key]
-      if value is not None:
-        result.append(value)
-    except KeyError:
-      pass
-  return result
-  
+_dict_multi_get = lambda keys,dict : [v for (k,v) in dict.iteritems() if k in dict if v is not None]
+
 def _validate_storage(storage_list):
   for storage in storage_list:
     if storage not in ALL_LEVELS:
