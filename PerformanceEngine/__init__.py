@@ -207,7 +207,7 @@ class pdb(object):
   '''Wrapper class for google.appengine.ext.db with seamless cache support'''
   
   @classmethod
-  def get(cls,keys,_storage = [MEMCACHE,DATASTORE],
+  def get(cls,keys,_storage = None,
           _local_expiration = LOCAL_EXPIRATION,
           _memcache_expiration = MEMCACHE_EXPIRATION,
           _result_type=LIST,
@@ -249,8 +249,11 @@ class pdb(object):
       KeyParameterError: If something other than db.Key or string repr.
         of db.Key is given
     """
-    _storage = _to_list(_storage)
-    _validate_storage(_storage)
+    if _storage is None:
+      _storage = [MEMCACHE,DATASTORE]
+    else:
+      _storage = _to_list(_storage)
+      _validate_storage(_storage)
     
     keys = map(_key_str,_to_list(keys))
     old_keys = keys
@@ -311,7 +314,7 @@ class pdb(object):
         
 
   @classmethod
-  def put(cls,models,_storage = [MEMCACHE,DATASTORE],
+  def put(cls,models,_storage = None,
                       _local_expiration = LOCAL_EXPIRATION,
                       _memcache_expiration = MEMCACHE_EXPIRATION,
                        **kwds):
@@ -345,8 +348,11 @@ class pdb(object):
     keys = [] 
     models = _to_list(models)   
     models = [model for model in models if model is not None]
-    _storage = _to_list(_storage)
-    _validate_storage(_storage)
+    if _storage is None:
+      _storage = [MEMCACHE,DATASTORE]
+    else:
+      _storage = _to_list(_storage)
+      _validate_storage(_storage)
     
     try: 
       _to_dict(models)
@@ -378,7 +384,7 @@ class pdb(object):
 
 
   @classmethod
-  def delete(cls,keys,_storage = ALL_LEVELS):
+  def delete(cls,keys,_storage = None):
     """Delete one or more Model instances from given storage layers
   
     Args:
@@ -389,8 +395,11 @@ class pdb(object):
         config: datastore_rpc.Configuration to use for this request.
     """
     keys = map(_key_str, _to_list(keys))
-    _storage = _to_list(_storage)
-    _validate_storage(_storage)  
+    if _storage is None:
+      _storage = ALL_LEVELS
+    else:
+      _storage = _to_list(_storage)
+      _validate_storage(_storage)
     
     if DATASTORE in _storage:
       db.delete(keys)
@@ -811,7 +820,7 @@ class pdb(object):
         return None
       
     def fetch(self,limit,offset=0,
-              _cache=[],
+              _cache=None,
               _local_expiration = QUERY_EXPIRATION,
               _memcache_expiration = QUERY_EXPIRATION):
       '''By default this method runs the query on datastore.
@@ -839,9 +848,13 @@ class pdb(object):
       Raises:
         CacheLayerError: If an invalid cache layer name is supplied
       '''
-      klass = self.__class__        
-      _cache = _to_list(_cache)
-      _validate_cache(_cache)
+      klass = self.__class__
+      if _cache is None:
+        _cache = []
+      else:
+        _cache = _to_list(_cache)
+        _validate_cache(_cache)
+
       result = None
       
       local_flag = True if LOCAL in _cache else False
