@@ -21,7 +21,7 @@ Features
 
 Requirements
 -------------
-* [cachepy](http://appengine-cookbook.appspot.com/recipe/cachepy-faster-than-memcache-and-unlimited-quota/)
+* [cachepy](http://code.google.com/p/cachepy/)
 
 What is it good for?
 -------------------
