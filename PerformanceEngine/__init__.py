@@ -299,9 +299,10 @@ class pdb(object):
         except KeyError:
           result.append(None)   
       #Normalized result
-      if len(result) > 1:
+      if len(result) > 1 or len(result) == 0:
         return result
-      return result[0]
+      else:
+        return result[0]
     elif _result_type == DICT:
       return models
     elif _result_type == NAME_DICT:
